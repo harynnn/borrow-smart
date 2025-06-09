@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    <!-- Public Pages -->
+    <!-- Main Pages -->
     <url>
         <loc>https://borrowsmart.uthm.edu.my/</loc>
-        <changefreq>weekly</changefreq>
+        <changefreq>daily</changefreq>
         <priority>1.0</priority>
     </url>
     <url>
@@ -16,10 +16,12 @@
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
+
+    <!-- Information Pages -->
     <url>
-        <loc>https://borrowsmart.uthm.edu.my/forgotpassword.php</loc>
+        <loc>https://borrowsmart.uthm.edu.my/about.php</loc>
         <changefreq>monthly</changefreq>
-        <priority>0.5</priority>
+        <priority>0.7</priority>
     </url>
     <url>
         <loc>https://borrowsmart.uthm.edu.my/contact.php</loc>
@@ -27,30 +29,126 @@
         <priority>0.7</priority>
     </url>
     <url>
-        <loc>https://borrowsmart.uthm.edu.my/help.php</loc>
-        <changefreq>weekly</changefreq>
-        <priority>0.7</priority>
+        <loc>https://borrowsmart.uthm.edu.my/terms.php</loc>
+        <changefreq>yearly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/privacy.php</loc>
+        <changefreq>yearly</changefreq>
+        <priority>0.5</priority>
     </url>
     <url>
         <loc>https://borrowsmart.uthm.edu.my/faq.php</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+
+    <!-- Help Pages -->
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/help/borrowing-guide.php</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/help/returning-guide.php</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/help/instrument-care.php</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+
+    <!-- News and Updates -->
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/news/</loc>
         <changefreq>weekly</changefreq>
         <priority>0.7</priority>
     </url>
     <url>
-        <loc>https://borrowsmart.uthm.edu.my/terms.php</loc>
+        <loc>https://borrowsmart.uthm.edu.my/announcements/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+
+    <!-- Instrument Categories -->
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/instruments/string/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/instruments/wind/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/instruments/percussion/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/instruments/keyboard/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/instruments/electronic/</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+
+    <!-- Department Pages -->
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fkee/</loc>
         <changefreq>monthly</changefreq>
         <priority>0.5</priority>
     </url>
-
-    <!-- Static Assets -->
     <url>
-        <loc>https://borrowsmart.uthm.edu.my/images/borrowsmart.png</loc>
-        <changefreq>yearly</changefreq>
-        <priority>0.3</priority>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fkaab/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
     </url>
     <url>
-        <loc>https://borrowsmart.uthm.edu.my/images/uthmlogo.png</loc>
-        <changefreq>yearly</changefreq>
-        <priority>0.3</priority>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fkmp/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fsktm/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/ftk/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fptp/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fstpi/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/fptv/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/ppd/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://borrowsmart.uthm.edu.my/departments/pps/</loc>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
     </url>
 </urlset>

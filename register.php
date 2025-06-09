@@ -15,7 +15,7 @@ if (isset($_SESSION['uid'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - BorrowSmart</title>
+    <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -39,8 +39,8 @@ if (isset($_SESSION['uid'])) {
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600">
                 Or
-                <a href="login.php" class="font-medium text-gray-900 hover:text-gray-800">
-                    sign in to your existing account
+                <a href="login.php" class="font-medium text-gray-900 hover:underline">
+                    sign in to your account
                 </a>
             </p>
         </div>
@@ -72,14 +72,13 @@ if (isset($_SESSION['uid'])) {
 
                     <div>
                         <label for="name" class="block text-sm font-medium text-gray-700">
-                            Full Name
+                            Full name
                         </label>
                         <div class="mt-1">
                             <input id="name" name="name" type="text" required
                                 class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
                                 pattern="[A-Za-z\s]+"
                                 title="Please enter a valid name (letters and spaces only)"
-                                minlength="2"
                                 maxlength="100">
                         </div>
                     </div>
@@ -103,8 +102,8 @@ if (isset($_SESSION['uid'])) {
                         <div class="mt-1">
                             <input id="matric" name="matric" type="text" required
                                 class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm uppercase"
-                                pattern="[A-Z][A-Z][0-9]{2}[A-Z]{2}[0-9]{4}"
-                                title="Please enter a valid matric number (e.g., AI20EC0123)"
+                                pattern="[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}"
+                                title="Please enter a valid matric number (e.g., AB12CD3456)"
                                 maxlength="10">
                         </div>
                     </div>
@@ -118,7 +117,9 @@ if (isset($_SESSION['uid'])) {
                                 class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm">
                                 <option value="">Select Department</option>
                                 <?php foreach (DEPARTMENTS as $code => $name): ?>
-                                    <option value="<?php echo $code; ?>"><?php echo $name; ?></option>
+                                    <option value="<?php echo $code; ?>">
+                                        <?php echo htmlspecialchars($name); ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -151,10 +152,14 @@ if (isset($_SESSION['uid'])) {
                         <input id="terms" name="terms" type="checkbox" required
                             class="h-4 w-4 text-gray-900 focus:ring-gray-500 border-gray-300 rounded">
                         <label for="terms" class="ml-2 block text-sm text-gray-900">
-                            I agree to the 
-                            <a href="terms.php" class="font-medium text-gray-900 hover:text-gray-800">Terms of Service</a>
+                            I agree to the
+                            <a href="terms.php" class="font-medium text-gray-900 hover:underline" target="_blank">
+                                Terms of Service
+                            </a>
                             and
-                            <a href="privacy.php" class="font-medium text-gray-900 hover:text-gray-800">Privacy Policy</a>
+                            <a href="privacy.php" class="font-medium text-gray-900 hover:underline" target="_blank">
+                                Privacy Policy
+                            </a>
                         </label>
                     </div>
 
@@ -165,72 +170,106 @@ if (isset($_SESSION['uid'])) {
                         </button>
                     </div>
                 </form>
-            </div>
 
-            <div class="mt-8 text-center">
-                <p class="text-xs text-gray-500">
-                    Already have an account? 
-                    <a href="login.php" class="font-medium text-gray-900 hover:text-gray-800">Sign in</a>
-                </p>
+                <div class="mt-6">
+                    <div class="relative">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-2 bg-white text-gray-500">
+                                Need help?
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-2 gap-3">
+                        <a href="verify_email.php" 
+                           class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                            Verify Email
+                        </a>
+                        <a href="contact.php" 
+                           class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                            Contact Support
+                        </a>
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-500">
+                &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved.
+            </p>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.querySelector('form');
-            const nameInput = document.getElementById('name');
-            const emailInput = document.getElementById('email');
-            const matricInput = document.getElementById('matric');
-            const passwordInput = document.getElementById('password');
-            const confirmPasswordInput = document.getElementById('confirm_password');
-            const submitButton = form.querySelector('button[type="submit"]');
+        // Auto-focus name field
+        document.getElementById('name').focus();
 
-            // Format matric number to uppercase
-            matricInput.addEventListener('input', function(e) {
-                this.value = this.value.toUpperCase();
-            });
+        // Show/hide password
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+            input.setAttribute('type', type);
+            const button = input.parentElement.querySelector('button');
+            button.innerHTML = type === 'password' ? 
+                '<i class="fas fa-eye"></i>' : 
+                '<i class="fas fa-eye-slash"></i>';
+        }
 
-            // Show/hide password functionality
-            const togglePassword = document.createElement('button');
-            togglePassword.type = 'button';
-            togglePassword.className = 'absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600';
-            togglePassword.innerHTML = '<i class="fas fa-eye"></i>';
-            
-            passwordInput.parentElement.style.position = 'relative';
-            passwordInput.parentElement.appendChild(togglePassword);
+        // Add toggle buttons for both password fields
+        ['password', 'confirm_password'].forEach(function(id) {
+            const input = document.getElementById(id);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'absolute right-3 top-2 text-gray-400 hover:text-gray-600';
+            button.innerHTML = '<i class="fas fa-eye"></i>';
+            button.onclick = function() { togglePassword(id); };
+            input.parentElement.style.position = 'relative';
+            input.parentElement.appendChild(button);
+        });
 
-            togglePassword.addEventListener('click', function() {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                confirmPasswordInput.setAttribute('type', type);
-                this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-            });
+        // Form validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
 
-            // Real-time password validation
-            function validatePassword() {
-                const password = passwordInput.value;
-                const confirm = confirmPasswordInput.value;
-                
-                if (password === confirm) {
-                    confirmPasswordInput.setCustomValidity('');
-                } else {
-                    confirmPasswordInput.setCustomValidity('Passwords do not match');
-                }
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match');
+                return;
             }
 
-            passwordInput.addEventListener('input', validatePassword);
-            confirmPasswordInput.addEventListener('input', validatePassword);
+            if (!document.getElementById('terms').checked) {
+                e.preventDefault();
+                alert('Please agree to the Terms of Service and Privacy Policy');
+                return;
+            }
+        });
 
-            // Form validation
-            form.addEventListener('submit', function(e) {
-                if (!form.checkValidity()) {
-                    e.preventDefault();
-                    return;
-                }
+        // Format matric number
+        document.getElementById('matric').addEventListener('input', function(e) {
+            this.value = this.value.toUpperCase();
+        });
 
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating account...';
+        // Password strength indicator
+        document.getElementById('password').addEventListener('input', function(e) {
+            const password = this.value;
+            const strength = {
+                length: password.length >= 8,
+                uppercase: /[A-Z]/.test(password),
+                lowercase: /[a-z]/.test(password),
+                number: /[0-9]/.test(password),
+                special: /[^A-Za-z0-9]/.test(password)
+            };
+
+            // Update requirements list
+            document.querySelectorAll('.requirement').forEach(function(req) {
+                const type = req.dataset.type;
+                req.classList.toggle('text-green-500', strength[type]);
+                req.classList.toggle('text-gray-500', !strength[type]);
             });
         });
     </script>

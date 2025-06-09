@@ -8,54 +8,46 @@ if (isset($_SESSION['uid'])) {
     exit();
 }
 
-// Verify request method
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: register.php');
-    exit();
-}
-
-// Verify CSRF token
-if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-    $_SESSION['error'] = "Invalid request. Please try again.";
-    header('Location: register.php');
-    exit();
-}
-
-// Validate required fields
-$required_fields = ['name', 'email', 'matric', 'department', 'password', 'confirm_password', 'terms'];
-foreach ($required_fields as $field) {
-    if (empty($_POST[$field])) {
-        $_SESSION['error'] = "Please fill in all required fields.";
-        header('Location: register.php');
-        exit();
-    }
-}
-
-// Clean input data
-$name = cleanInput($_POST['name']);
-$email = strtolower(cleanInput($_POST['email']));
-$matric = strtoupper(cleanInput($_POST['matric']));
-$department = cleanInput($_POST['department']);
-$password = $_POST['password'];
-$confirm_password = $_POST['confirm_password'];
-
 try {
-    // Begin transaction
-    $pdo->beginTransaction();
-
-    // Validate name format
-    if (!preg_match('/^[A-Za-z\s]{2,100}$/', $name)) {
-        throw new Exception("Please enter a valid name (letters and spaces only, 2-100 characters).");
+    // Verify CSRF token
+    if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'])) {
+        throw new Exception("Invalid request. Please try again.");
     }
 
-    // Validate email format
+    // Validate required fields
+    $required_fields = ['name', 'email', 'matric', 'department', 'password', 'confirm_password', 'terms'];
+    foreach ($required_fields as $field) {
+        if (empty($_POST[$field])) {
+            throw new Exception("All fields are required.");
+        }
+    }
+
+    // Clean and validate input
+    $name = trim($_POST['name']);
+    $email = strtolower(trim($_POST['email']));
+    $matric = strtoupper(trim($_POST['matric']));
+    $department = trim($_POST['department']);
+    $password = $_POST['password'];
+    $confirm_password = $_POST['confirm_password'];
+
+    // Validate name (letters and spaces only)
+    if (!preg_match('/^[A-Za-z\s]+$/', $name)) {
+        throw new Exception("Name can only contain letters and spaces.");
+    }
+
+    // Validate email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new Exception("Please enter a valid email address.");
     }
 
+    // Check if email is from UTHM domain
+    if (!preg_match('/@(uthm\.edu\.my|student\.uthm\.edu\.my)$/', $email)) {
+        throw new Exception("Please use your UTHM email address.");
+    }
+
     // Validate matric number format
-    if (!preg_match('/^[A-Z][A-Z][0-9]{2}[A-Z]{2}[0-9]{4}$/', $matric)) {
-        throw new Exception("Please enter a valid matric number (e.g., AI20EC0123).");
+    if (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', $matric)) {
+        throw new Exception("Please enter a valid matric number (e.g., AB12CD3456).");
     }
 
     // Validate department
@@ -63,196 +55,193 @@ try {
         throw new Exception("Please select a valid department.");
     }
 
-    // Validate password match
+    // Validate password
+    if (strlen($password) < PASSWORD_MIN_LENGTH) {
+        throw new Exception("Password must be at least " . PASSWORD_MIN_LENGTH . " characters long.");
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        throw new Exception("Password must contain at least one uppercase letter.");
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        throw new Exception("Password must contain at least one lowercase letter.");
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        throw new Exception("Password must contain at least one number.");
+    }
+    if (!preg_match('/[^A-Za-z0-9]/', $password)) {
+        throw new Exception("Password must contain at least one special character.");
+    }
+
+    // Check if passwords match
     if ($password !== $confirm_password) {
         throw new Exception("Passwords do not match.");
     }
 
-    // Validate password strength
-    if (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $password)) {
-        throw new Exception("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.");
-    }
+    // Begin transaction
+    $pdo->beginTransaction();
 
-    // Check if email already exists
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    if ($stmt->fetchColumn() > 0) {
-        throw new Exception("This email address is already registered.");
-    }
+    try {
+        // Check if email already exists
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM users 
+            WHERE email = ?
+        ");
+        $stmt->execute([$email]);
+        if ($stmt->fetchColumn() > 0) {
+            throw new Exception("This email address is already registered.");
+        }
 
-    // Check if matric number already exists
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE matric = ?");
-    $stmt->execute([$matric]);
-    if ($stmt->fetchColumn() > 0) {
-        throw new Exception("This matric number is already registered.");
-    }
+        // Check if matric number already exists
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM users 
+            WHERE matric = ?
+        ");
+        $stmt->execute([$matric]);
+        if ($stmt->fetchColumn() > 0) {
+            throw new Exception("This matric number is already registered.");
+        }
 
-    // Get student role ID
-    $stmt = $pdo->prepare("SELECT role_id FROM roles WHERE role_name = 'student'");
-    $stmt->execute();
-    $roleId = $stmt->fetchColumn();
+        // Get student role ID
+        $stmt = $pdo->prepare("
+            SELECT role_id 
+            FROM roles 
+            WHERE role_name = 'student'
+        ");
+        $stmt->execute();
+        $role_id = $stmt->fetchColumn();
 
-    if (!$roleId) {
-        throw new Exception("System configuration error. Please contact support.");
-    }
+        if (!$role_id) {
+            throw new Exception("System configuration error. Please contact support.");
+        }
 
-    // Generate verification token
-    $verificationToken = bin2hex(random_bytes(32));
+        // Generate verification token
+        $verification_token = $securityHelper->generateRandomString(32);
 
-    // Hash password
-    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        // Create user
+        $stmt = $pdo->prepare("
+            INSERT INTO users (
+                name, email, matric, department, password, role_id, 
+                verification_token, status, created_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, 'pending', NOW()
+            )
+        ");
+        $stmt->execute([
+            $name,
+            $email,
+            $matric,
+            $department,
+            password_hash($password, PASSWORD_DEFAULT),
+            $role_id,
+            $verification_token
+        ]);
 
-    // Insert user
-    $stmt = $pdo->prepare("
-        INSERT INTO users (
-            name, email, matric, department, password, role_id, 
-            status, email_verified, verification_token, created_at
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?, 
-            'pending', 0, ?, NOW()
-        )
-    ");
-    $stmt->execute([
-        $name,
-        $email,
-        $matric,
-        $department,
-        $hashedPassword,
-        $roleId,
-        $verificationToken
-    ]);
+        $user_id = $pdo->lastInsertId();
 
-    $userId = $pdo->lastInsertId();
+        // Send verification email
+        require_once 'PHPMailer-master/src/PHPMailer.php';
+        require_once 'PHPMailer-master/src/SMTP.php';
+        require_once 'PHPMailer-master/src/Exception.php';
 
-    // Send verification email
-    require_once 'PHPMailer-master/src/PHPMailer.php';
-    require_once 'PHPMailer-master/src/SMTP.php';
-    require_once 'PHPMailer-master/src/Exception.php';
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
 
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->SMTPAuth = true;
+        $mail->Username = SMTP_USERNAME;
+        $mail->Password = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = SMTP_PORT;
 
-    // Server settings
-    $mail->isSMTP();
-    $mail->Host = SMTP_HOST;
-    $mail->SMTPAuth = true;
-    $mail->Username = SMTP_USERNAME;
-    $mail->Password = SMTP_PASSWORD;
-    $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = SMTP_PORT;
+        // Recipients
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($email, $name);
 
-    // Recipients
-    $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
-    $mail->addAddress($email, $name);
-
-    // Content
-    $mail->isHTML(true);
-    $mail->Subject = 'Verify Your Email - BorrowSmart';
-    
-    $verificationUrl = APP_URL . '/verify_email.php?token=' . $verificationToken;
-    
-    $emailContent = '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                line-height: 1.6; 
-                color: #333;
-            }
-            .container { 
-                max-width: 600px; 
-                margin: 0 auto; 
-                padding: 20px;
-                background-color: #f8f9fa;
-            }
-            .header { 
-                text-align: center; 
-                margin-bottom: 30px;
-                padding: 20px;
-                background-color: #fff;
-                border-radius: 8px;
-            }
-            .button {
-                display: inline-block;
-                padding: 12px 24px;
-                background-color: #1a1a1a;
-                color: #ffffff;
-                text-decoration: none;
-                border-radius: 4px;
-                margin: 20px 0;
-            }
-            .warning {
-                background-color: #fff3cd;
-                border-left: 4px solid #ffc107;
-                padding: 12px;
-                margin: 20px 0;
-            }
-            .footer { 
-                text-align: center; 
-                margin-top: 30px;
-                font-size: 12px;
-                color: #666;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>Welcome to BorrowSmart!</h2>
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Verify Your Email - ' . APP_NAME;
+        
+        $verificationLink = APP_URL . '/verify_email.php?token=' . $verification_token;
+        
+        $mail->Body = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333;
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    padding: 20px;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    background-color: #000;
+                    color: #fff;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Welcome to ' . APP_NAME . '!</h2>
+                <p>Hello ' . htmlspecialchars($name) . ',</p>
+                <p>Thank you for registering. Please verify your email address by clicking the button below:</p>
+                <p>
+                    <a href="' . $verificationLink . '" class="button">Verify Email</a>
+                </p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p>' . $verificationLink . '</p>
+                <p>This link will expire in 24 hours.</p>
+                <p>If you did not create an account, please ignore this email.</p>
+                <p>Best regards,<br>' . APP_NAME . ' Team</p>
             </div>
-            <p>Hello ' . htmlspecialchars($name) . ',</p>
-            <p>Thank you for registering with BorrowSmart. To complete your registration and activate your account, please click the button below:</p>
-            <div style="text-align: center;">
-                <a href="' . $verificationUrl . '" class="button">Verify Email Address</a>
-            </div>
-            <p>Or copy and paste this URL into your browser:</p>
-            <p>' . $verificationUrl . '</p>
-            <div class="warning">
-                <p><strong>Important:</strong></p>
-                <ul>
-                    <li>This verification link will expire in 24 hours</li>
-                    <li>If you did not create this account, please ignore this email</li>
-                </ul>
-            </div>
-            <div class="footer">
-                <p>This is an automated message from BorrowSmart System. Please do not reply.</p>
-                <p>&copy; ' . date('Y') . ' BorrowSmart - UTHM. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
-    </html>';
-    
-    $mail->Body = $emailContent;
-    $mail->AltBody = "Welcome to BorrowSmart!\n\n"
-                   . "Please verify your email address by clicking this link:\n"
-                   . $verificationUrl . "\n\n"
-                   . "This link will expire in 24 hours.";
+        </body>
+        </html>';
+        
+        $mail->AltBody = "Hello " . $name . ",\n\n"
+                       . "Thank you for registering. Please verify your email address by clicking this link:\n\n"
+                       . $verificationLink . "\n\n"
+                       . "This link will expire in 24 hours.\n\n"
+                       . "If you did not create an account, please ignore this email.\n\n"
+                       . "Best regards,\n"
+                       . APP_NAME . " Team";
 
-    $mail->send();
+        $mail->send();
 
-    // Log registration event
-    $securityHelper->logSecurityEvent(
-        $userId,
-        'REGISTRATION',
-        'New user registration'
-    );
+        // Log registration
+        $securityHelper->logSecurityEvent(
+            $user_id,
+            'REGISTRATION',
+            'New user registration'
+        );
 
-    // Commit transaction
-    $pdo->commit();
+        // Commit transaction
+        $pdo->commit();
 
-    // Set success message
-    $_SESSION['success'] = "Registration successful! Please check your email to verify your account.";
+        // Set success message
+        $_SESSION['success'] = "Registration successful! Please check your email to verify your account.";
 
-    // Redirect to login page
-    header('Location: login.php');
-    exit();
+        // Redirect to login page
+        header('Location: login.php');
+        exit();
+
+    } catch (Exception $e) {
+        // Rollback transaction
+        $pdo->rollBack();
+        throw $e;
+    }
 
 } catch (Exception $e) {
-    // Rollback transaction
-    $pdo->rollBack();
-
-    error_log("Registration Error: " . $e->getMessage());
     $_SESSION['error'] = $e->getMessage();
     header('Location: register.php');
     exit();

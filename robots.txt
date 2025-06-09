@@ -1,78 +1,51 @@
 User-agent: *
 Allow: /
-Allow: /about.php
-Allow: /contact.php
-Allow: /help.php
+Allow: /index.php
 Allow: /login.php
 Allow: /register.php
-Allow: /browse.php
-Allow: /instruments.php
+Allow: /contact.php
+Allow: /about.php
+Allow: /terms.php
+Allow: /privacy.php
 
-# Disallow administrative and sensitive pages
+# Disallow sensitive directories and files
+Disallow: /includes/
+Disallow: /uploads/
+Disallow: /logs/
+Disallow: /cache/
+Disallow: /config.php
+Disallow: /config.env.php
+Disallow: /db_updates.sql
+Disallow: /.htaccess
+Disallow: /composer.json
+Disallow: /composer.lock
+Disallow: /package.json
+Disallow: /package-lock.json
+Disallow: /README.md
+Disallow: /LICENSE
+
+# Disallow admin and system pages
 Disallow: /admin_*
 Disallow: /staff_*
-Disallow: /includes/
-Disallow: /config.php
-Disallow: /dbconnection.php
-Disallow: /*_action.php
-Disallow: /error.php
+Disallow: /manage_*
+Disallow: /system_*
 Disallow: /maintenance.php
+Disallow: /error.php
 Disallow: /unauthorized.php
-Disallow: /verify_*.php
-Disallow: /resend_*.php
-Disallow: /profile.php
-Disallow: /settings.php
+
+# Disallow authentication and user-specific pages
+Disallow: /login_action.php
 Disallow: /logout.php
+Disallow: /registration_action.php
+Disallow: /verify_email.php
+Disallow: /resetpassword*.php
+Disallow: /profile.php
+Disallow: /change_password.php
+Disallow: /update_profile.php
+Disallow: /update_password.php
 
-# Disallow query parameters
-Disallow: /*?*
-
-# Crawl-delay directive
+# Crawl-delay directive (optional)
 Crawl-delay: 10
 
 # Sitemap location
-Sitemap: http://localhost:8000/sitemap.xml
-
-# Additional rules for specific bots
-User-agent: Googlebot
-Allow: /sitemap.xml
-
-User-agent: Bingbot
-Allow: /sitemap.xml
-
-User-agent: DuckDuckBot
-Allow: /sitemap.xml
-
-# Block bad bots
-User-agent: Baiduspider
-Disallow: /
-
-User-agent: PetalBot
-Disallow: /
-
-# Block archive.org bot from archiving sensitive pages
-User-agent: archive.org_bot
-Disallow: /admin_*
-Disallow: /staff_*
-Disallow: /profile.php
-Disallow: /settings.php
-
-# Block AI training bots
-User-agent: GPTBot
-Disallow: /
-
-User-agent: ChatGPT-User
-Disallow: /
-
-User-agent: Google-Extended
-Disallow: /
-
-User-agent: CCBot
-Disallow: /
-
-User-agent: anthropic-ai
-Disallow: /
-
-# Rate limiting hints
-# Please respect our server resources and limit requests to 1 per second
-# Contact webmaster@borrowsmart.uthm.edu.my for any questions
+Sitemap: https://borrowsmart.uthm.edu.my/sitemap.xml

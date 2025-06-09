@@ -9,25 +9,13 @@ if (isset($_SESSION['uid'])) {
     header('Location: ' . $_SESSION['role'] . '_dashboard.php');
     exit();
 }
-
-// Check for session expiry message
-$expired = isset($_GET['expired']) && $_GET['expired'] === 'true';
-if ($expired) {
-    $_SESSION['error'] = "Your session has expired. Please sign in again.";
-}
-
-// Check for security logout
-$security = isset($_GET['security']) && $_GET['security'] === 'true';
-if ($security) {
-    $_SESSION['error'] = "You have been logged out for security reasons.";
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - BorrowSmart</title>
+    <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -51,7 +39,7 @@ if ($security) {
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600">
                 Or
-                <a href="register.php" class="font-medium text-gray-900 hover:text-gray-800">
+                <a href="register.php" class="font-medium text-gray-900 hover:underline">
                     create a new account
                 </a>
             </p>
@@ -59,26 +47,6 @@ if ($security) {
 
         <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
             <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                <?php if (isset($_SESSION['success'])): ?>
-                    <div class="mb-4 bg-green-50 border-l-4 border-green-500 p-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                </svg>
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm text-green-700">
-                                    <?php 
-                                    echo htmlspecialchars($_SESSION['success']);
-                                    unset($_SESSION['success']);
-                                    ?>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
                 <?php if (isset($_SESSION['error'])): ?>
                     <div class="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
                         <div class="flex">
@@ -99,9 +67,29 @@ if ($security) {
                     </div>
                 <?php endif; ?>
 
+                <?php if (isset($_SESSION['success'])): ?>
+                    <div class="mb-4 bg-green-50 border-l-4 border-green-500 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-green-700">
+                                    <?php 
+                                    echo htmlspecialchars($_SESSION['success']);
+                                    unset($_SESSION['success']);
+                                    ?>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <form class="space-y-6" action="login_action.php" method="POST">
                     <?php echo csrf_field(); ?>
-                    
+
                     <div>
                         <label for="email" class="block text-sm font-medium text-gray-700">
                             Email address
@@ -132,7 +120,7 @@ if ($security) {
                         </div>
 
                         <div class="text-sm">
-                            <a href="forgotpassword.php" class="font-medium text-gray-900 hover:text-gray-800">
+                            <a href="forgotpassword.php" class="font-medium text-gray-900 hover:underline">
                                 Forgot your password?
                             </a>
                         </div>
@@ -158,10 +146,10 @@ if ($security) {
                         </div>
                     </div>
 
-                    <div class="mt-6 grid grid-cols-1 gap-3">
+                    <div class="mt-6 grid grid-cols-2 gap-3">
                         <a href="verify_email.php" 
                            class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                            Verify Email Address
+                            Verify Email
                         </a>
                         <a href="contact.php" 
                            class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
@@ -170,47 +158,50 @@ if ($security) {
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="mt-8 text-center">
-                <p class="text-xs text-gray-500">
-                    By signing in, you agree to our 
-                    <a href="terms.php" class="font-medium text-gray-900 hover:text-gray-800">Terms of Service</a> and 
-                    <a href="privacy.php" class="font-medium text-gray-900 hover:text-gray-800">Privacy Policy</a>
-                </p>
-            </div>
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-500">
+                By signing in, you agree to our
+                <a href="terms.php" class="text-gray-900 hover:underline">Terms of Service</a>
+                and
+                <a href="privacy.php" class="text-gray-900 hover:underline">Privacy Policy</a>
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved.
+            </p>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.querySelector('form');
-            const emailInput = document.getElementById('email');
-            const passwordInput = document.getElementById('password');
-            const submitButton = form.querySelector('button[type="submit"]');
+        // Auto-focus email field
+        document.getElementById('email').focus();
 
-            // Focus email input on page load
-            emailInput.focus();
+        // Show/hide password
+        const togglePassword = document.createElement('button');
+        togglePassword.type = 'button';
+        togglePassword.className = 'absolute right-3 top-2 text-gray-400 hover:text-gray-600';
+        togglePassword.innerHTML = '<i class="fas fa-eye"></i>';
+        togglePassword.addEventListener('click', function() {
+            const password = document.getElementById('password');
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+        });
 
-            // Show/hide password functionality
-            const togglePassword = document.createElement('button');
-            togglePassword.type = 'button';
-            togglePassword.className = 'absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600';
-            togglePassword.innerHTML = '<i class="fas fa-eye"></i>';
-            
-            passwordInput.parentElement.style.position = 'relative';
-            passwordInput.parentElement.appendChild(togglePassword);
+        const passwordWrapper = document.getElementById('password').parentElement;
+        passwordWrapper.style.position = 'relative';
+        passwordWrapper.appendChild(togglePassword);
 
-            togglePassword.addEventListener('click', function() {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-            });
+        // Form validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
 
-            // Form validation
-            form.addEventListener('submit', function(e) {
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing in...';
-            });
+            if (!email || !password) {
+                e.preventDefault();
+                alert('Please fill in all fields');
+            }
         });
     </script>
 </body>

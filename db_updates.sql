@@ -11,15 +11,16 @@ CREATE TABLE IF NOT EXISTS roles (
 INSERT INTO roles (role_name, description) VALUES
 ('admin', 'System administrator with full access'),
 ('staff', 'Staff member with instrument management access'),
-('student', 'Student with borrowing privileges');
+('student', 'Student with borrowing privileges')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     uid INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    matric VARCHAR(10) UNIQUE,
-    department VARCHAR(10) NOT NULL,
+    matric VARCHAR(20) UNIQUE,
+    department VARCHAR(50),
     password VARCHAR(255) NOT NULL,
     role_id INT NOT NULL,
     status ENUM('pending', 'active', 'suspended', 'deleted') DEFAULT 'pending',
@@ -35,15 +36,15 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (role_id) REFERENCES roles(role_id)
 );
 
--- Create password_resets table
-CREATE TABLE IF NOT EXISTS password_resets (
-    id INT PRIMARY KEY AUTO_INCREMENT,
+-- Create sessions table
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id VARCHAR(255) PRIMARY KEY,
     user_id INT NOT NULL,
-    token VARCHAR(255) NOT NULL,
-    used BOOLEAN DEFAULT FALSE,
-    expires_at TIMESTAMP NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    payload TEXT,
+    last_activity TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    used_at TIMESTAMP NULL,
     FOREIGN KEY (user_id) REFERENCES users(uid)
 );
 
@@ -57,48 +58,16 @@ CREATE TABLE IF NOT EXISTS remember_tokens (
     FOREIGN KEY (user_id) REFERENCES users(uid)
 );
 
--- Create sessions table
-CREATE TABLE IF NOT EXISTS sessions (
+-- Create password_resets table
+CREATE TABLE IF NOT EXISTS password_resets (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
-    session_id VARCHAR(255) NOT NULL UNIQUE,
-    ip_address VARCHAR(45) NOT NULL,
-    device_info VARCHAR(255),
-    last_activity TIMESTAMP NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(uid)
-);
-
--- Create security_logs table
-CREATE TABLE IF NOT EXISTS security_logs (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    event_type VARCHAR(50) NOT NULL,
-    description TEXT,
-    ip_address VARCHAR(45),
-    device_info VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(uid)
-);
-
--- Create failed_logins table
-CREATE TABLE IF NOT EXISTS failed_logins (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,
-    attempt_count INT DEFAULT 1,
-    last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(uid)
-);
-
--- Create ip_blacklist table
-CREATE TABLE IF NOT EXISTS ip_blacklist (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    ip_address VARCHAR(45) NOT NULL UNIQUE,
-    reason TEXT,
-    expires_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create two_factor_codes table
@@ -108,56 +77,83 @@ CREATE TABLE IF NOT EXISTS two_factor_codes (
     code VARCHAR(6) NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     used BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     used_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(uid)
 );
 
--- Create categories table
-CREATE TABLE IF NOT EXISTS categories (
-    category_id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(100) NOT NULL UNIQUE,
+-- Create security_logs table
+CREATE TABLE IF NOT EXISTS security_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    event_type VARCHAR(50) NOT NULL,
     description TEXT,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    FOREIGN KEY (user_id) REFERENCES users(uid)
 );
-
--- Insert default categories
-INSERT INTO categories (name, description) VALUES
-('Electronic', 'Electronic measurement and testing equipment'),
-('Mechanical', 'Mechanical tools and machinery'),
-('Computing', 'Computing and networking equipment'),
-('Civil', 'Civil engineering equipment');
 
 -- Create instruments table
 CREATE TABLE IF NOT EXISTS instruments (
     instrument_id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(100) NOT NULL,
     description TEXT,
-    category_id INT NOT NULL,
-    department VARCHAR(10) NOT NULL,
-    location VARCHAR(255),
+    category VARCHAR(50) NOT NULL,
+    condition_status ENUM('excellent', 'good', 'fair', 'poor', 'maintenance') NOT NULL,
+    serial_number VARCHAR(100) UNIQUE,
+    purchase_date DATE,
+    last_maintenance_date DATE,
+    next_maintenance_date DATE,
     status ENUM('available', 'borrowed', 'maintenance', 'retired') DEFAULT 'available',
-    condition_notes TEXT,
-    last_maintenance DATE,
-    next_maintenance DATE,
+    notes TEXT,
+    created_by INT,
+    updated_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (category_id) REFERENCES categories(category_id)
+    FOREIGN KEY (created_by) REFERENCES users(uid),
+    FOREIGN KEY (updated_by) REFERENCES users(uid)
 );
 
--- Create requests table
-CREATE TABLE IF NOT EXISTS requests (
+-- Create instrument_images table
+CREATE TABLE IF NOT EXISTS instrument_images (
+    image_id INT PRIMARY KEY AUTO_INCREMENT,
+    instrument_id INT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    is_primary BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(instrument_id)
+);
+
+-- Create maintenance_records table
+CREATE TABLE IF NOT EXISTS maintenance_records (
+    record_id INT PRIMARY KEY AUTO_INCREMENT,
+    instrument_id INT NOT NULL,
+    maintenance_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    maintenance_date DATE NOT NULL,
+    cost DECIMAL(10,2),
+    performed_by VARCHAR(100),
+    notes TEXT,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(instrument_id),
+    FOREIGN KEY (created_by) REFERENCES users(uid)
+);
+
+-- Create borrowing_requests table
+CREATE TABLE IF NOT EXISTS borrowing_requests (
     request_id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
     instrument_id INT NOT NULL,
-    status ENUM('pending', 'approved', 'rejected', 'cancelled', 'completed') DEFAULT 'pending',
+    request_date TIMESTAMP NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
     purpose TEXT NOT NULL,
-    requested_from DATETIME NOT NULL,
-    requested_until DATETIME NOT NULL,
+    status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
     approved_by INT,
     approved_at TIMESTAMP NULL,
-    returned_at TIMESTAMP NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -166,18 +162,28 @@ CREATE TABLE IF NOT EXISTS requests (
     FOREIGN KEY (approved_by) REFERENCES users(uid)
 );
 
--- Create maintenance_logs table
-CREATE TABLE IF NOT EXISTS maintenance_logs (
-    log_id INT PRIMARY KEY AUTO_INCREMENT,
+-- Create borrowing_records table
+CREATE TABLE IF NOT EXISTS borrowing_records (
+    record_id INT PRIMARY KEY AUTO_INCREMENT,
+    request_id INT NOT NULL,
+    user_id INT NOT NULL,
     instrument_id INT NOT NULL,
-    performed_by INT NOT NULL,
-    maintenance_type ENUM('routine', 'repair', 'calibration') NOT NULL,
-    description TEXT,
-    cost DECIMAL(10,2),
-    next_maintenance DATE,
+    checkout_date TIMESTAMP NOT NULL,
+    due_date TIMESTAMP NOT NULL,
+    return_date TIMESTAMP NULL,
+    condition_out ENUM('excellent', 'good', 'fair', 'poor') NOT NULL,
+    condition_in ENUM('excellent', 'good', 'fair', 'poor') NULL,
+    checkout_notes TEXT,
+    return_notes TEXT,
+    checked_out_by INT NOT NULL,
+    checked_in_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (request_id) REFERENCES borrowing_requests(request_id),
+    FOREIGN KEY (user_id) REFERENCES users(uid),
     FOREIGN KEY (instrument_id) REFERENCES instruments(instrument_id),
-    FOREIGN KEY (performed_by) REFERENCES users(uid)
+    FOREIGN KEY (checked_out_by) REFERENCES users(uid),
+    FOREIGN KEY (checked_in_by) REFERENCES users(uid)
 );
 
 -- Create notifications table
@@ -187,7 +193,6 @@ CREATE TABLE IF NOT EXISTS notifications (
     type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
-    read BOOLEAN DEFAULT FALSE,
     read_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(uid)
@@ -197,7 +202,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS settings (
     setting_id INT PRIMARY KEY AUTO_INCREMENT,
     setting_key VARCHAR(50) NOT NULL UNIQUE,
-    setting_value TEXT NOT NULL,
+    setting_value TEXT,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -205,36 +210,25 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Insert default settings
 INSERT INTO settings (setting_key, setting_value, description) VALUES
-('max_borrow_days', '14', 'Maximum number of days an instrument can be borrowed'),
-('max_active_requests', '3', 'Maximum number of active requests per user'),
-('maintenance_reminder_days', '7', 'Days before maintenance due to send reminder'),
-('return_reminder_days', '2', 'Days before due date to send return reminder'),
-('system_maintenance_mode', 'false', 'System maintenance mode status');
+('max_borrow_days', '14', 'Maximum number of days a student can borrow an instrument'),
+('max_active_borrows', '2', 'Maximum number of instruments a student can borrow at once'),
+('maintenance_interval_days', '90', 'Default interval in days between instrument maintenance'),
+('late_return_penalty', '5.00', 'Daily penalty fee for late returns (in MYR)'),
+('system_maintenance_mode', 'false', 'Whether the system is in maintenance mode'),
+('email_notifications', 'true', 'Whether to send email notifications'),
+('allow_renewals', 'true', 'Whether to allow borrowing renewals'),
+('max_renewal_times', '1', 'Maximum number of times a borrowing can be renewed'),
+('renewal_days', '7', 'Number of days added when renewing a borrowing')
+ON DUPLICATE KEY UPDATE 
+    setting_value = VALUES(setting_value),
+    description = VALUES(description);
 
--- Create indexes for better performance
+-- Create indexes for performance
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_matric ON users(matric);
 CREATE INDEX idx_users_status ON users(status);
-CREATE INDEX idx_security_logs_user ON security_logs(user_id, created_at);
-CREATE INDEX idx_failed_logins_user ON failed_logins(user_id, ip_address);
-CREATE INDEX idx_sessions_user ON sessions(user_id, last_activity);
 CREATE INDEX idx_instruments_status ON instruments(status);
-CREATE INDEX idx_requests_user ON requests(user_id, status);
-CREATE INDEX idx_requests_instrument ON requests(instrument_id, status);
-CREATE INDEX idx_notifications_user ON notifications(user_id, read);
-
--- Create admin user (password: Admin@123)
-INSERT INTO users (
-    name, email, matric, department, password, role_id, 
-    status, email_verified, email_verified_at
-) VALUES (
-    'System Administrator',
-    'admin@uthm.edu.my',
-    'AD00AD0000',
-    'ADMIN',
-    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-    (SELECT role_id FROM roles WHERE role_name = 'admin'),
-    'active',
-    1,
-    NOW()
-);
+CREATE INDEX idx_borrowing_requests_status ON borrowing_requests(status);
+CREATE INDEX idx_borrowing_records_dates ON borrowing_records(checkout_date, due_date, return_date);
+CREATE INDEX idx_notifications_user ON notifications(user_id, read_at);
+CREATE INDEX idx_security_logs_user ON security_logs(user_id, created_at);

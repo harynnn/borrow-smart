@@ -1,0 +1,78 @@
+User-agent: *
+Allow: /
+Allow: /about.php
+Allow: /contact.php
+Allow: /help.php
+Allow: /login.php
+Allow: /register.php
+Allow: /browse.php
+Allow: /instruments.php
+
+# Disallow administrative and sensitive pages
+Disallow: /admin_*
+Disallow: /staff_*
+Disallow: /includes/
+Disallow: /config.php
+Disallow: /dbconnection.php
+Disallow: /*_action.php
+Disallow: /error.php
+Disallow: /maintenance.php
+Disallow: /unauthorized.php
+Disallow: /verify_*.php
+Disallow: /resend_*.php
+Disallow: /profile.php
+Disallow: /settings.php
+Disallow: /logout.php
+
+# Disallow query parameters
+Disallow: /*?*
+
+# Crawl-delay directive
+Crawl-delay: 10
+
+# Sitemap location
+Sitemap: http://localhost:8000/sitemap.xml
+
+# Additional rules for specific bots
+User-agent: Googlebot
+Allow: /sitemap.xml
+
+User-agent: Bingbot
+Allow: /sitemap.xml
+
+User-agent: DuckDuckBot
+Allow: /sitemap.xml
+
+# Block bad bots
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+# Block archive.org bot from archiving sensitive pages
+User-agent: archive.org_bot
+Disallow: /admin_*
+Disallow: /staff_*
+Disallow: /profile.php
+Disallow: /settings.php
+
+# Block AI training bots
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+# Rate limiting hints
+# Please respect our server resources and limit requests to 1 per second
+# Contact webmaster@borrowsmart.uthm.edu.my for any questions

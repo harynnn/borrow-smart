@@ -6,174 +6,193 @@ if (!defined('SECURE_ACCESS')) {
 }
 
 // Error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/../logs/error.log');
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    // Set secure session parameters
-    ini_set('session.cookie_httponly', 1);
-    ini_set('session.cookie_secure', 1);
-    ini_set('session.cookie_samesite', 'Lax');
-    ini_set('session.use_strict_mode', 1);
-    ini_set('session.use_only_cookies', 1);
-    ini_set('session.gc_maxlifetime', 3600);
-    
-    session_start();
+if (DEBUG_MODE) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    error_reporting(0);
+    ini_set('display_errors', 0);
 }
 
+// Set timezone
+date_default_timezone_set('Asia/Kuala_Lumpur');
+
+// Set internal character encoding
+mb_internal_encoding('UTF-8');
+
 // Load configuration
-require_once __DIR__ . '/../config.php';
+require_once 'config.php';
 
-// Database connection
-require_once __DIR__ . '/../dbconnection.php';
+// Load database connection
+require_once 'dbconnection.php';
 
-// Load helpers
-require_once __DIR__ . '/../security_helper.php';
-require_once __DIR__ . '/functions.php';
-require_once __DIR__ . '/session_handler.php';
+// Load helper functions
+require_once 'functions.php';
 
-// Initialize security helper
+// Load security helper
+require_once dirname(__DIR__) . '/security_helper.php';
 $securityHelper = new SecurityHelper($pdo);
 
-// Initialize custom session handler
-$sessionHandler = new SessionHandler($pdo, SESSION_LIFETIME);
-session_set_save_handler($sessionHandler, true);
+// Load session handler
+require_once 'session_handler.php';
+SessionHandler::initSession();
 
-// Constants
-define('DEPARTMENTS', [
-    'FKEE' => 'Faculty of Electrical and Electronic Engineering',
-    'FKMP' => 'Faculty of Mechanical and Manufacturing Engineering',
-    'FSKTM' => 'Faculty of Computing',
-    'FKAAB' => 'Faculty of Civil Engineering and Built Environment',
-    'FTK' => 'Faculty of Engineering Technology',
-    'FPTP' => 'Faculty of Technology Management and Business',
-    'FPTV' => 'Faculty of Technical and Vocational Education',
-    'FAST' => 'Faculty of Applied Sciences and Technology'
-]);
+// Load middleware
+require_once dirname(__DIR__) . '/middleware.php';
 
-// Maintenance mode check
-$stmt = $pdo->prepare("
-    SELECT setting_value 
-    FROM settings 
-    WHERE setting_key = 'system_maintenance_mode'
-");
-$stmt->execute();
-$maintenanceMode = $stmt->fetchColumn() === 'true';
-
-if ($maintenanceMode && !in_array($_SERVER['PHP_SELF'], ['/maintenance.php', '/admin_login.php'])) {
+// Check maintenance mode
+if (MAINTENANCE_MODE && 
+    !in_array($_SERVER['REMOTE_ADDR'], MAINTENANCE_ALLOWED_IPS) && 
+    basename($_SERVER['PHP_SELF']) !== 'maintenance.php') {
     header('Location: maintenance.php');
     exit();
 }
 
-// Session security validation
-if (isset($_SESSION['uid'])) {
-    if (!$securityHelper->validateSession()) {
-        // Log the security event
+// Check for remembered user
+if (!SessionHandler::isAuthenticated() && SessionHandler::hasRememberToken()) {
+    $remember_token = SessionHandler::getRememberToken();
+    
+    // Find valid remember token
+    $stmt = $pdo->prepare("
+        SELECT u.*, r.role_name 
+        FROM users u 
+        JOIN roles r ON u.role_id = r.role_id 
+        JOIN remember_tokens rt ON u.uid = rt.user_id 
+        WHERE rt.token = ? 
+        AND rt.expires_at > NOW()
+    ");
+    $stmt->execute([password_hash($remember_token, PASSWORD_DEFAULT)]);
+    $user = $stmt->fetch();
+
+    if ($user) {
+        // Start session for remembered user
+        session_regenerate_id(true);
+        $_SESSION['uid'] = $user['uid'];
+        $_SESSION['name'] = $user['name'];
+        $_SESSION['email'] = $user['email'];
+        $_SESSION['role'] = $user['role_name'];
+        $_SESSION['created_at'] = time();
+        $_SESSION['last_activity'] = time();
+
+        // Update last login
+        $stmt = $pdo->prepare("
+            UPDATE users 
+            SET last_login = NOW() 
+            WHERE uid = ?
+        ");
+        $stmt->execute([$user['uid']]);
+
+        // Log auto-login
         $securityHelper->logSecurityEvent(
-            $_SESSION['uid'],
-            'SESSION_INVALID',
-            'Invalid session detected'
+            $user['uid'],
+            'AUTO_LOGIN',
+            'Auto-login via remember token from ' . $_SERVER['REMOTE_ADDR']
         );
+    }
+}
 
-        // Clear session
-        $_SESSION = array();
-        session_destroy();
+// Force HTTPS
+if (HTTPS_ENABLED && !isset($_SERVER['HTTPS'])) {
+    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+    exit();
+}
 
-        // Redirect to login with security flag
-        header('Location: login.php?security=true');
+// Check if password change is required
+if (SessionHandler::isAuthenticated() && 
+    basename($_SERVER['PHP_SELF']) !== 'change_password.php') {
+    
+    $stmt = $pdo->prepare("
+        SELECT force_password_change, 
+               password_changed_at,
+               DATEDIFF(NOW(), password_changed_at) as days_since_change
+        FROM users 
+        WHERE uid = ?
+    ");
+    $stmt->execute([$_SESSION['uid']]);
+    $result = $stmt->fetch();
+
+    if ($result['force_password_change'] || 
+        ($result['password_changed_at'] && $result['days_since_change'] > PASSWORD_EXPIRY_DAYS)) {
+        $_SESSION['error'] = "For security reasons, you must change your password.";
+        header('Location: change_password.php');
         exit();
     }
+}
 
-    // Update session activity
-    $securityHelper->updateSessionActivity();
+// Check account status
+if (SessionHandler::isAuthenticated() && 
+    basename($_SERVER['PHP_SELF']) !== 'logout.php') {
+    
+    $stmt = $pdo->prepare("
+        SELECT status 
+        FROM users 
+        WHERE uid = ?
+    ");
+    $stmt->execute([$_SESSION['uid']]);
+    $status = $stmt->fetchColumn();
+
+    if ($status !== 'active') {
+        SessionHandler::destroySession();
+        header('Location: login.php?inactive=1');
+        exit();
+    }
 }
 
 // CSRF Protection
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!isset($_POST['csrf_token']) || !$securityHelper->verifyCsrfToken($_POST['csrf_token'])) {
-        // Log the security event
-        if (isset($_SESSION['uid'])) {
-            $securityHelper->logSecurityEvent(
-                $_SESSION['uid'],
-                'CSRF_ATTEMPT',
-                'Invalid CSRF token detected'
-            );
-        }
-
-        // Return 403 Forbidden
-        header('HTTP/1.0 403 Forbidden');
-        exit('Invalid request.');
+    if (!isset($_POST['csrf_token']) || 
+        !$securityHelper->verifyCsrfToken($_POST['csrf_token'])) {
+        http_response_code(403);
+        die('Invalid CSRF token');
     }
 }
 
-// Helper Functions
+/**
+ * Generate CSRF field
+ */
 function csrf_field() {
     global $securityHelper;
-    return '<input type="hidden" name="csrf_token" value="' . $securityHelper->generateCsrfToken() . '">';
+    return '<input type="hidden" name="csrf_token" value="' . 
+           $securityHelper->generateCsrfToken() . '">';
 }
 
-function getPasswordRequirements() {
-    return '
-    <div class="mt-1 text-xs text-gray-500">
-        Password must contain:
-        <ul class="list-disc list-inside">
-            <li>At least 8 characters</li>
-            <li>At least one uppercase letter</li>
-            <li>At least one lowercase letter</li>
-            <li>At least one number</li>
-            <li>At least one special character</li>
-        </ul>
-    </div>';
+/**
+ * Get Gravatar URL
+ */
+function getGravatarUrl($email, $size = 80) {
+    global $securityHelper;
+    return $securityHelper->getGravatarUrl($email, $size);
 }
 
+/**
+ * Format date/time
+ */
+function formatDateTime($datetime, $format = 'Y-m-d H:i:s') {
+    global $securityHelper;
+    return $securityHelper->formatDateTime($datetime, $format);
+}
+
+/**
+ * Get time ago
+ */
 function timeAgo($datetime) {
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-
-    if ($diff < 60) {
-        return 'just now';
-    } elseif ($diff < 3600) {
-        $mins = floor($diff / 60);
-        return $mins . ' minute' . ($mins > 1 ? 's' : '') . ' ago';
-    } elseif ($diff < 86400) {
-        $hours = floor($diff / 3600);
-        return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
-    } elseif ($diff < 604800) {
-        $days = floor($diff / 86400);
-        return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
-    } elseif ($diff < 2592000) {
-        $weeks = floor($diff / 604800);
-        return $weeks . ' week' . ($weeks > 1 ? 's' : '') . ' ago';
-    } else {
-        return date('F j, Y', $time);
-    }
+    global $securityHelper;
+    return $securityHelper->timeAgo($datetime);
 }
 
-function cleanInput($data) {
-    $data = trim($data);
-    $data = stripslashes($data);
-    $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-    return $data;
+/**
+ * Get department name
+ */
+function getDepartmentName($code) {
+    global $securityHelper;
+    return $securityHelper->getDepartmentName($code);
 }
 
-// Cleanup tasks (run occasionally)
-if (mt_rand(1, 100) === 1) {
-    $securityHelper->cleanupSessions();
+/**
+ * Get password requirements HTML
+ */
+function getPasswordRequirements() {
+    global $securityHelper;
+    return $securityHelper->getPasswordRequirements();
 }
-
-// Set default timezone
-date_default_timezone_set('Asia/Kuala_Lumpur');
-
-// Set headers for security
-header('X-Frame-Options: SAMEORIGIN');
-header('X-XSS-Protection: 1; mode=block');
-header('X-Content-Type-Options: nosniff');
-header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
-header("Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'");
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 ?>

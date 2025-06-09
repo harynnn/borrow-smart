@@ -1,10 +1,10 @@
 <?php
 class SecurityHelper {
     private $pdo;
-    private $maxLoginAttempts = 5;
-    private $lockoutDuration = 900; // 15 minutes in seconds
-    private $ipBlockDuration = 3600; // 1 hour in seconds
-    private $twoFactorExpiry = 300; // 5 minutes in seconds
+    private $max_attempts = 5;
+    private $lockout_time = 900; // 15 minutes in seconds
+    private $ip_max_attempts = 50;
+    private $ip_lockout_time = 3600; // 1 hour in seconds
 
     public function __construct($pdo) {
         $this->pdo = $pdo;
@@ -31,44 +31,198 @@ class SecurityHelper {
     }
 
     /**
+     * Generate random string
+     */
+    public function generateRandomString($length = 32) {
+        return bin2hex(random_bytes($length / 2));
+    }
+
+    /**
+     * Generate 2FA code
+     */
+    public function generate2FACode($user_id) {
+        // Generate 6-digit code
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        
+        // Store code in database
+        $stmt = $this->pdo->prepare("
+            INSERT INTO two_factor_codes (
+                user_id, code, expires_at
+            ) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))
+        ");
+        $stmt->execute([$user_id, $code]);
+        
+        return $code;
+    }
+
+    /**
+     * Verify 2FA code
+     */
+    public function verify2FACode($user_id, $code) {
+        $stmt = $this->pdo->prepare("
+            SELECT id 
+            FROM two_factor_codes 
+            WHERE user_id = ? 
+            AND code = ? 
+            AND used = 0 
+            AND expires_at > NOW()
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$user_id, $code]);
+        $result = $stmt->fetch();
+
+        if ($result) {
+            // Mark code as used
+            $stmt = $this->pdo->prepare("
+                UPDATE two_factor_codes 
+                SET used = 1,
+                    used_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->execute([$result['id']]);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Initialize session security
      */
-    public function initializeSession($userId) {
+    public function initializeSession($user_id) {
         // Regenerate session ID
         session_regenerate_id(true);
-
-        // Set session variables
-        $_SESSION['last_activity'] = time();
-        $_SESSION['created'] = time();
-        $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
-        $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
 
         // Store session in database
         $stmt = $this->pdo->prepare("
             INSERT INTO sessions (
-                user_id, session_id, ip_address, device_info, last_activity
+                session_id, user_id, ip_address, user_agent, last_activity
             ) VALUES (?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
-            $userId,
             session_id(),
+            $user_id,
             $_SERVER['REMOTE_ADDR'],
             $_SERVER['HTTP_USER_AGENT']
         ]);
+
+        // Set session security flags
+        $_SESSION['created_at'] = time();
+        $_SESSION['last_activity'] = time();
+        $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
+        $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
+    }
+
+    /**
+     * Validate session security
+     */
+    public function validateSession() {
+        if (!isset($_SESSION['uid'])) {
+            return false;
+        }
+
+        // Check session lifetime
+        if (isset($_SESSION['created_at']) && 
+            (time() - $_SESSION['created_at'] > SESSION_LIFETIME)) {
+            return false;
+        }
+
+        // Check session inactivity
+        if (isset($_SESSION['last_activity']) && 
+            (time() - $_SESSION['last_activity'] > SESSION_INACTIVITY)) {
+            return false;
+        }
+
+        // Check IP address
+        if (isset($_SESSION['ip_address']) && 
+            $_SESSION['ip_address'] !== $_SERVER['REMOTE_ADDR']) {
+            return false;
+        }
+
+        // Check user agent
+        if (isset($_SESSION['user_agent']) && 
+            $_SESSION['user_agent'] !== $_SERVER['HTTP_USER_AGENT']) {
+            return false;
+        }
+
+        // Update last activity
+        $_SESSION['last_activity'] = time();
+        $this->updateSessionActivity();
+
+        return true;
     }
 
     /**
      * Update session activity
      */
-    public function updateSessionActivity() {
-        if (isset($_SESSION['uid'])) {
+    private function updateSessionActivity() {
+        $stmt = $this->pdo->prepare("
+            UPDATE sessions 
+            SET last_activity = NOW()
+            WHERE session_id = ?
+        ");
+        $stmt->execute([session_id()]);
+    }
+
+    /**
+     * Handle failed login attempt
+     */
+    public function handleFailedLogin($user_id) {
+        // Log failed attempt for user
+        $stmt = $this->pdo->prepare("
+            INSERT INTO security_logs (
+                user_id, event_type, description, ip_address, user_agent
+            ) VALUES (?, 'LOGIN_FAILED', 'Failed login attempt', ?, ?)
+        ");
+        $stmt->execute([
+            $user_id,
+            $_SERVER['REMOTE_ADDR'],
+            $_SERVER['HTTP_USER_AGENT']
+        ]);
+
+        // Check if account should be locked
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*) 
+            FROM security_logs 
+            WHERE user_id = ? 
+            AND event_type = 'LOGIN_FAILED'
+            AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)
+        ");
+        $stmt->execute([$user_id, $this->lockout_time]);
+        
+        if ($stmt->fetchColumn() >= $this->max_attempts) {
+            // Lock account
             $stmt = $this->pdo->prepare("
-                UPDATE sessions 
-                SET last_activity = NOW()
-                WHERE session_id = ?
+                UPDATE users 
+                SET status = 'suspended'
+                WHERE uid = ?
             ");
-            $stmt->execute([session_id()]);
+            $stmt->execute([$user_id]);
+
+            // Log account lock
+            $this->logSecurityEvent(
+                $user_id,
+                'ACCOUNT_LOCKED',
+                'Account locked due to too many failed login attempts'
+            );
         }
+    }
+
+    /**
+     * Check if account is locked
+     */
+    public function isAccountLocked($user_id) {
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*) 
+            FROM security_logs 
+            WHERE user_id = ? 
+            AND event_type = 'LOGIN_FAILED'
+            AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)
+        ");
+        $stmt->execute([$user_id, $this->lockout_time]);
+        
+        return $stmt->fetchColumn() >= $this->max_attempts;
     }
 
     /**
@@ -77,160 +231,43 @@ class SecurityHelper {
     public function isIPBlocked() {
         $stmt = $this->pdo->prepare("
             SELECT COUNT(*) 
-            FROM ip_blacklist 
+            FROM security_logs 
             WHERE ip_address = ? 
-            AND (expires_at > NOW() OR expires_at IS NULL)
+            AND event_type = 'LOGIN_FAILED'
+            AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)
         ");
-        $stmt->execute([$_SERVER['REMOTE_ADDR']]);
-        return $stmt->fetchColumn() > 0;
-    }
-
-    /**
-     * Check if account is locked
-     */
-    public function isAccountLocked($userId) {
-        $stmt = $this->pdo->prepare("
-            SELECT COUNT(*) 
-            FROM failed_logins 
-            WHERE user_id = ? 
-            AND attempt_count >= ? 
-            AND last_attempt > DATE_SUB(NOW(), INTERVAL ? SECOND)
-        ");
-        $stmt->execute([$userId, $this->maxLoginAttempts, $this->lockoutDuration]);
-        return $stmt->fetchColumn() > 0;
-    }
-
-    /**
-     * Handle failed login attempt
-     */
-    public function handleFailedLogin($userId) {
-        $stmt = $this->pdo->prepare("
-            SELECT id, attempt_count 
-            FROM failed_logins 
-            WHERE user_id = ? 
-            AND ip_address = ? 
-            AND last_attempt > DATE_SUB(NOW(), INTERVAL ? SECOND)
-        ");
-        $stmt->execute([$userId, $_SERVER['REMOTE_ADDR'], $this->lockoutDuration]);
-        $failedLogin = $stmt->fetch();
-
-        if ($failedLogin) {
-            // Update existing record
-            $newCount = $failedLogin['attempt_count'] + 1;
-            $stmt = $this->pdo->prepare("
-                UPDATE failed_logins 
-                SET attempt_count = ?, last_attempt = NOW()
-                WHERE id = ?
-            ");
-            $stmt->execute([$newCount, $failedLogin['id']]);
-
-            // Block IP if too many attempts
-            if ($newCount >= $this->maxLoginAttempts) {
-                $stmt = $this->pdo->prepare("
-                    INSERT INTO ip_blacklist (
-                        ip_address, reason, expires_at
-                    ) VALUES (
-                        ?, 'Too many failed login attempts', 
-                        DATE_ADD(NOW(), INTERVAL ? SECOND)
-                    )
-                    ON DUPLICATE KEY UPDATE 
-                        expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND)
-                ");
-                $stmt->execute([
-                    $_SERVER['REMOTE_ADDR'],
-                    $this->ipBlockDuration,
-                    $this->ipBlockDuration
-                ]);
-            }
-        } else {
-            // Create new record
-            $stmt = $this->pdo->prepare("
-                INSERT INTO failed_logins (
-                    user_id, ip_address, attempt_count, last_attempt
-                ) VALUES (?, ?, 1, NOW())
-            ");
-            $stmt->execute([$userId, $_SERVER['REMOTE_ADDR']]);
-        }
+        $stmt->execute([
+            $_SERVER['REMOTE_ADDR'],
+            $this->ip_lockout_time
+        ]);
+        
+        return $stmt->fetchColumn() >= $this->ip_max_attempts;
     }
 
     /**
      * Reset failed login attempts
      */
-    public function resetFailedAttempts($userId) {
+    public function resetFailedAttempts($user_id) {
         $stmt = $this->pdo->prepare("
-            DELETE FROM failed_logins 
-            WHERE user_id = ?
-        ");
-        $stmt->execute([$userId]);
-    }
-
-    /**
-     * Generate 2FA code
-     */
-    public function generate2FACode($userId) {
-        // Generate random 6-digit code
-        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        // Store code in database
-        $stmt = $this->pdo->prepare("
-            INSERT INTO two_factor_codes (
-                user_id, code, expires_at
-            ) VALUES (
-                ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND)
-            )
-        ");
-        $stmt->execute([
-            $userId,
-            password_hash($code, PASSWORD_DEFAULT),
-            $this->twoFactorExpiry
-        ]);
-
-        return $code;
-    }
-
-    /**
-     * Verify 2FA code
-     */
-    public function verify2FACode($userId, $code) {
-        $stmt = $this->pdo->prepare("
-            SELECT id, code 
-            FROM two_factor_codes 
+            DELETE FROM security_logs 
             WHERE user_id = ? 
-            AND used = 0 
-            AND expires_at > NOW()
-            ORDER BY created_at DESC 
-            LIMIT 1
+            AND event_type = 'LOGIN_FAILED'
         ");
-        $stmt->execute([$userId]);
-        $twoFactor = $stmt->fetch();
-
-        if (!$twoFactor || !password_verify($code, $twoFactor['code'])) {
-            return false;
-        }
-
-        // Mark code as used
-        $stmt = $this->pdo->prepare("
-            UPDATE two_factor_codes 
-            SET used = 1, used_at = NOW()
-            WHERE id = ?
-        ");
-        $stmt->execute([$twoFactor['id']]);
-
-        return true;
+        $stmt->execute([$user_id]);
     }
 
     /**
      * Log security event
      */
-    public function logSecurityEvent($userId, $eventType, $description) {
+    public function logSecurityEvent($user_id, $event_type, $description) {
         $stmt = $this->pdo->prepare("
             INSERT INTO security_logs (
-                user_id, event_type, description, ip_address, device_info
+                user_id, event_type, description, ip_address, user_agent
             ) VALUES (?, ?, ?, ?, ?)
         ");
         $stmt->execute([
-            $userId,
-            $eventType,
+            $user_id,
+            $event_type,
             $description,
             $_SERVER['REMOTE_ADDR'],
             $_SERVER['HTTP_USER_AGENT']
@@ -238,47 +275,15 @@ class SecurityHelper {
     }
 
     /**
-     * Validate session security
-     */
-    public function validateSession() {
-        // Check if security-related session variables are set
-        if (!isset($_SESSION['created']) || !isset($_SESSION['last_activity']) ||
-            !isset($_SESSION['user_agent']) || !isset($_SESSION['ip_address'])) {
-            return false;
-        }
-
-        // Check session age
-        if (time() - $_SESSION['created'] > SESSION_LIFETIME) {
-            return false;
-        }
-
-        // Check for session hijacking
-        if ($_SESSION['ip_address'] !== $_SERVER['REMOTE_ADDR'] ||
-            $_SESSION['user_agent'] !== $_SERVER['HTTP_USER_AGENT']) {
-            return false;
-        }
-
-        // Check session activity
-        if (time() - $_SESSION['last_activity'] > SESSION_TIMEOUT) {
-            return false;
-        }
-
-        // Update last activity
-        $_SESSION['last_activity'] = time();
-
-        return true;
-    }
-
-    /**
      * Clean up expired sessions
      */
-    public function cleanupSessions() {
+    public function cleanupExpiredSessions() {
         // Remove expired sessions
         $stmt = $this->pdo->prepare("
             DELETE FROM sessions 
             WHERE last_activity < DATE_SUB(NOW(), INTERVAL ? SECOND)
         ");
-        $stmt->execute([SESSION_LIFETIME]);
+        $stmt->execute([SESSION_INACTIVITY]);
 
         // Remove expired remember tokens
         $stmt = $this->pdo->prepare("
@@ -287,26 +292,21 @@ class SecurityHelper {
         ");
         $stmt->execute();
 
+        // Remove expired password reset tokens
+        $stmt = $this->pdo->prepare("
+            DELETE FROM password_resets 
+            WHERE (used = 1 AND used_at < DATE_SUB(NOW(), INTERVAL 24 HOUR))
+            OR (used = 0 AND expires_at < NOW())
+        ");
+        $stmt->execute();
+
         // Remove expired 2FA codes
         $stmt = $this->pdo->prepare("
             DELETE FROM two_factor_codes 
-            WHERE expires_at < NOW()
+            WHERE (used = 1 AND used_at < DATE_SUB(NOW(), INTERVAL 24 HOUR))
+            OR (used = 0 AND expires_at < NOW())
         ");
         $stmt->execute();
-
-        // Remove expired IP blocks
-        $stmt = $this->pdo->prepare("
-            DELETE FROM ip_blacklist 
-            WHERE expires_at < NOW()
-        ");
-        $stmt->execute();
-
-        // Remove old failed login attempts
-        $stmt = $this->pdo->prepare("
-            DELETE FROM failed_logins 
-            WHERE last_attempt < DATE_SUB(NOW(), INTERVAL ? SECOND)
-        ");
-        $stmt->execute([$this->lockoutDuration]);
     }
 
     /**
@@ -315,40 +315,54 @@ class SecurityHelper {
     public function validatePassword($password) {
         $errors = [];
 
-        if (strlen($password) < 8) {
-            $errors[] = "Password must be at least 8 characters long";
+        if (strlen($password) < PASSWORD_MIN_LENGTH) {
+            $errors[] = "Password must be at least " . PASSWORD_MIN_LENGTH . " characters long.";
         }
         if (!preg_match('/[A-Z]/', $password)) {
-            $errors[] = "Password must include at least one uppercase letter";
+            $errors[] = "Password must contain at least one uppercase letter.";
         }
         if (!preg_match('/[a-z]/', $password)) {
-            $errors[] = "Password must include at least one lowercase letter";
+            $errors[] = "Password must contain at least one lowercase letter.";
         }
         if (!preg_match('/[0-9]/', $password)) {
-            $errors[] = "Password must include at least one number";
+            $errors[] = "Password must contain at least one number.";
         }
         if (!preg_match('/[^A-Za-z0-9]/', $password)) {
-            $errors[] = "Password must include at least one special character";
+            $errors[] = "Password must contain at least one special character.";
         }
 
-        return empty($errors) ? true : $errors;
+        return $errors;
     }
 
     /**
-     * Generate random string
+     * Sanitize input
      */
-    public function generateRandomString($length = 32) {
-        return bin2hex(random_bytes($length / 2));
+    public function sanitizeInput($input) {
+        if (is_array($input)) {
+            foreach ($input as $key => $value) {
+                $input[$key] = $this->sanitizeInput($value);
+            }
+        } else {
+            $input = trim($input);
+            $input = stripslashes($input);
+            $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
+        }
+        return $input;
     }
 
     /**
-     * Clean input data
+     * Validate email
      */
-    public function cleanInput($data) {
-        $data = trim($data);
-        $data = stripslashes($data);
-        $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-        return $data;
+    public function validateEmail($email) {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) &&
+               preg_match('/@(uthm\.edu\.my|student\.uthm\.edu\.my)$/', $email);
+    }
+
+    /**
+     * Validate matric number
+     */
+    public function validateMatric($matric) {
+        return preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', $matric);
     }
 }
 ?>

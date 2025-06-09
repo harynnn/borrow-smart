@@ -1,0 +1,111 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: url('/images/bg_ppuk.jpg') no-repeat center center fixed;
+    background-size: cover;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: rgba(212, 154, 17, 0.7);
+}
+
+.navbar img {
+    height: 50px;
+}
+/* Main container styles */
+main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh; /* Full viewport height */
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+main h1 {
+    font-size: 2.5rem; /* Large heading font size */
+    color: #9d07ae; /* Dark text color */
+    margin-bottom: 20px; /* Space below heading */
+}
+
+main p {
+    font-size: 1.2rem; /* Slightly larger font size for paragraph */
+    color: #171818; /* Subtle dark color */
+    margin-bottom: 30px; /* Space below paragraph */
+}
+
+/* Button styles */
+main .button {
+    display: inline-block;
+    text-decoration: none;
+    color: #fff; /* White text */
+    background-color: #2980b9; /* Primary blue color */
+    padding: 10px 20px; /* Button padding */
+    margin: 0 10px; /* Space between buttons */
+    font-size: 1rem; /* Button font size */
+    border-radius: 5px; /* Rounded corners */
+    transition: background-color 0.3s, transform 0.2s; /* Smooth hover effect */
+}
+
+main .button:hover {
+    background-color: #1a5276; /* Darker blue on hover */
+    transform: scale(1.05); /* Slightly enlarge on hover */
+}
+
+.container {
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+.container h2 {
+    margin-bottom: 20px;
+    font-size: 24px;
+}
+
+.container input {
+    width: 90%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.container button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.container button:hover {
+    background-color: #0056b3;
+}
+
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 10px;
+    background-color: #007bff;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.button:hover {
+    background-color: #0056b3;
+}
+

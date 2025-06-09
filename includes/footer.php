@@ -2,171 +2,199 @@
 // Prevent direct access
 if (!defined('SECURE_ACCESS')) {
     header('HTTP/1.0 403 Forbidden');
-    exit;
+    exit('Direct access is not allowed.');
 }
 ?>
-        </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white">
-        <div class="mx-auto max-w-7xl overflow-hidden px-6 py-8 sm:py-12 lg:px-8">
-            <nav class="-mb-6 columns-2 sm:flex sm:justify-center sm:space-x-12" aria-label="Footer">
-                <div class="pb-6">
-                    <a href="about.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">About</a>
-                </div>
-                <div class="pb-6">
-                    <a href="help.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">Help Center</a>
-                </div>
-                <div class="pb-6">
-                    <a href="privacy.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">Privacy Policy</a>
-                </div>
-                <div class="pb-6">
-                    <a href="terms.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">Terms of Service</a>
-                </div>
-                <div class="pb-6">
-                    <a href="contact.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">Contact</a>
-                </div>
-                <?php if (DEBUG_MODE): ?>
-                    <div class="pb-6">
-                        <a href="phpinfo.php" class="text-sm leading-6 text-gray-600 hover:text-gray-900">System Info</a>
+    <footer class="bg-white mt-8">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Logo and Description -->
+                <div class="col-span-1 md:col-span-2">
+                    <div class="flex items-center space-x-4">
+                        <img src="/images/borrowsmart.png" alt="BorrowSmart Logo" class="h-8">
+                        <img src="/images/uthmlogo.png" alt="UTHM Logo" class="h-8">
                     </div>
+                    <p class="mt-4 text-sm text-gray-500">
+                        BorrowSmart is UTHM's instrument borrowing management system, 
+                        streamlining the process of borrowing and returning instruments 
+                        for students and staff.
+                    </p>
+                </div>
+
+                <!-- Quick Links -->
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                        Quick Links
+                    </h3>
+                    <ul class="mt-4 space-y-4">
+                        <li>
+                            <a href="help.php" class="text-base text-gray-500 hover:text-gray-900">
+                                Help Center
+                            </a>
+                        </li>
+                        <li>
+                            <a href="faq.php" class="text-base text-gray-500 hover:text-gray-900">
+                                FAQ
+                            </a>
+                        </li>
+                        <li>
+                            <a href="contact.php" class="text-base text-gray-500 hover:text-gray-900">
+                                Contact Support
+                            </a>
+                        </li>
+                        <li>
+                            <a href="terms.php" class="text-base text-gray-500 hover:text-gray-900">
+                                Terms of Service
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Contact Info -->
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                        Contact Us
+                    </h3>
+                    <ul class="mt-4 space-y-4">
+                        <li class="flex">
+                            <i class="fas fa-phone text-gray-400 mt-1"></i>
+                            <span class="ml-3 text-base text-gray-500">
+                                <?php echo CONTACT_PHONE; ?>
+                            </span>
+                        </li>
+                        <li class="flex">
+                            <i class="fas fa-envelope text-gray-400 mt-1"></i>
+                            <span class="ml-3 text-base text-gray-500">
+                                <?php echo SUPPORT_EMAIL; ?>
+                            </span>
+                        </li>
+                        <li class="flex">
+                            <i class="fas fa-map-marker-alt text-gray-400 mt-1"></i>
+                            <span class="ml-3 text-base text-gray-500">
+                                <?php echo CONTACT_ADDRESS; ?>
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Social Links -->
+            <div class="mt-8 border-t border-gray-200 pt-8">
+                <div class="flex justify-center space-x-6">
+                    <a href="<?php echo FACEBOOK_URL; ?>" class="text-gray-400 hover:text-gray-500">
+                        <span class="sr-only">Facebook</span>
+                        <i class="fab fa-facebook text-xl"></i>
+                    </a>
+                    <a href="<?php echo TWITTER_URL; ?>" class="text-gray-400 hover:text-gray-500">
+                        <span class="sr-only">Twitter</span>
+                        <i class="fab fa-twitter text-xl"></i>
+                    </a>
+                    <a href="<?php echo INSTAGRAM_URL; ?>" class="text-gray-400 hover:text-gray-500">
+                        <span class="sr-only">Instagram</span>
+                        <i class="fab fa-instagram text-xl"></i>
+                    </a>
+                    <a href="<?php echo YOUTUBE_URL; ?>" class="text-gray-400 hover:text-gray-500">
+                        <span class="sr-only">YouTube</span>
+                        <i class="fab fa-youtube text-xl"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Copyright -->
+            <div class="mt-8 border-t border-gray-200 pt-8">
+                <p class="text-center text-sm text-gray-400">
+                    &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved.
+                </p>
+                <?php if (APP_ENV === 'development'): ?>
+                    <p class="text-center text-xs text-gray-400 mt-2">
+                        Environment: Development | PHP Version: <?php echo PHP_VERSION; ?>
+                    </p>
                 <?php endif; ?>
-            </nav>
-
-            <div class="mt-8 flex justify-center space-x-10">
-                <a href="<?php echo SOCIAL_FACEBOOK; ?>" class="text-gray-400 hover:text-gray-500" target="_blank" rel="noopener noreferrer">
-                    <span class="sr-only">Facebook</span>
-                    <i class="fab fa-facebook text-xl"></i>
-                </a>
-                <a href="<?php echo SOCIAL_TWITTER; ?>" class="text-gray-400 hover:text-gray-500" target="_blank" rel="noopener noreferrer">
-                    <span class="sr-only">Twitter</span>
-                    <i class="fab fa-twitter text-xl"></i>
-                </a>
-                <a href="<?php echo SOCIAL_INSTAGRAM; ?>" class="text-gray-400 hover:text-gray-500" target="_blank" rel="noopener noreferrer">
-                    <span class="sr-only">Instagram</span>
-                    <i class="fab fa-instagram text-xl"></i>
-                </a>
             </div>
-
-            <div class="mt-8 border-t border-gray-900/10 pt-8">
-                <div class="flex justify-center space-x-10">
-                    <img class="h-8" src="/images/borrowsmart.png" alt="BorrowSmart Logo">
-                    <img class="h-8" src="/images/uthmlogo.png" alt="UTHM Logo">
-                </div>
-            </div>
-
-            <p class="mt-8 text-center text-xs leading-5 text-gray-500">
-                &copy; <?php echo date('Y'); ?> BorrowSmart - UTHM. All rights reserved.
-            </p>
-
-            <?php if (DEBUG_MODE): ?>
-                <div class="mt-4 text-center text-xs text-gray-400">
-                    <p>Page generated in: <?php echo number_format((microtime(true) - $_SERVER["REQUEST_TIME_FLOAT"]) * 1000, 2); ?>ms</p>
-                    <p>Memory usage: <?php echo formatFileSize(memory_get_usage()); ?></p>
-                    <?php if (isset($_SESSION['uid'])): ?>
-                        <p>User ID: <?php echo $_SESSION['uid']; ?> | Role: <?php echo $_SESSION['role']; ?></p>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
         </div>
     </footer>
 
     <!-- Scripts -->
     <script>
-        // Toggle mobile menu
-        document.getElementById('mobile-menu-button')?.addEventListener('click', function() {
-            document.getElementById('mobile-menu').classList.toggle('hidden');
+        // Mobile menu
+        document.querySelector('.mobile-menu-button').addEventListener('click', function() {
+            document.querySelector('.mobile-menu').classList.toggle('hidden');
         });
 
-        // Toggle user menu
-        document.getElementById('user-menu-button')?.addEventListener('click', function() {
-            document.getElementById('user-menu').classList.toggle('hidden');
+        // Profile menu
+        document.querySelector('.profile-menu-button')?.addEventListener('click', function() {
+            document.querySelector('.profile-menu').classList.toggle('hidden');
         });
 
-        // Close menus when clicking outside
+        // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
-            const mobileMenu = document.getElementById('mobile-menu');
-            const mobileMenuButton = document.getElementById('mobile-menu-button');
-            const userMenu = document.getElementById('user-menu');
-            const userMenuButton = document.getElementById('user-menu-button');
-
-            if (mobileMenu && mobileMenuButton && !mobileMenu.contains(event.target) && !mobileMenuButton.contains(event.target)) {
-                mobileMenu.classList.add('hidden');
-            }
-
-            if (userMenu && userMenuButton && !userMenu.contains(event.target) && !userMenuButton.contains(event.target)) {
-                userMenu.classList.add('hidden');
+            // Profile menu
+            if (!event.target.closest('.profile-menu-button') && !event.target.closest('.profile-menu')) {
+                document.querySelector('.profile-menu')?.classList.add('hidden');
             }
         });
 
-        // Auto-hide alerts after 5 seconds
-        document.querySelectorAll('.bg-green-50, .bg-red-50').forEach(function(alert) {
+        // Auto-hide flash messages
+        document.querySelectorAll('[role="alert"]').forEach(function(alert) {
             setTimeout(function() {
-                alert.style.transition = 'opacity 1s ease-out';
-                alert.style.opacity = '0';
-                setTimeout(function() {
-                    alert.remove();
-                }, 1000);
+                alert.remove();
             }, 5000);
         });
 
-        // Add loading indicator for forms
+        // Form validation
         document.querySelectorAll('form').forEach(function(form) {
-            form.addEventListener('submit', function() {
-                const submitButton = form.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = true;
-                    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+            form.addEventListener('submit', function(e) {
+                if (!form.checkValidity()) {
+                    e.preventDefault();
+                    // Highlight invalid fields
+                    form.querySelectorAll(':invalid').forEach(function(field) {
+                        field.classList.add('border-red-500');
+                    });
                 }
+            });
+        });
+
+        // Remove validation styling on input
+        document.querySelectorAll('input, select, textarea').forEach(function(field) {
+            field.addEventListener('input', function() {
+                this.classList.remove('border-red-500');
             });
         });
 
         // Confirm dangerous actions
         document.querySelectorAll('[data-confirm]').forEach(function(element) {
-            element.addEventListener('click', function(event) {
+            element.addEventListener('click', function(e) {
                 if (!confirm(this.dataset.confirm)) {
-                    event.preventDefault();
+                    e.preventDefault();
                 }
             });
         });
 
-        // Handle session timeout warning
-        <?php if (isset($_SESSION['last_activity'])): ?>
-            const sessionTimeout = <?php echo SESSION_LIFETIME; ?> * 1000;
-            const warningTime = 5 * 60 * 1000; // 5 minutes before timeout
-            
-            function checkSessionTimeout() {
-                const timeElapsed = Date.now() - <?php echo $_SESSION['last_activity'] * 1000; ?>;
-                const timeRemaining = sessionTimeout - timeElapsed;
-                
-                if (timeRemaining <= warningTime && timeRemaining > 0) {
-                    if (!document.getElementById('session-warning')) {
-                        const warning = document.createElement('div');
-                        warning.id = 'session-warning';
-                        warning.className = 'fixed bottom-4 right-4 bg-yellow-100 border-l-4 border-yellow-500 p-4';
-                        warning.innerHTML = `
-                            <div class="flex">
-                                <div class="flex-shrink-0">
-                                    <i class="fas fa-exclamation-triangle text-yellow-400"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <p class="text-sm text-yellow-700">
-                                        Your session will expire in ${Math.ceil(timeRemaining / 60000)} minutes.
-                                        <a href="login.php" class="font-medium underline">Click here to stay logged in</a>
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                        document.body.appendChild(warning);
-                    }
-                } else if (timeRemaining <= 0) {
-                    window.location.href = 'logout.php?expired=true';
-                }
-            }
+        // Initialize tooltips
+        document.querySelectorAll('[data-tooltip]').forEach(function(element) {
+            element.addEventListener('mouseenter', function(e) {
+                let tooltip = document.createElement('div');
+                tooltip.className = 'absolute z-10 px-2 py-1 text-xs text-white bg-gray-900 rounded-md';
+                tooltip.textContent = this.dataset.tooltip;
+                tooltip.style.top = (e.target.offsetTop - 25) + 'px';
+                tooltip.style.left = e.target.offsetLeft + 'px';
+                document.body.appendChild(tooltip);
 
-            setInterval(checkSessionTimeout, 60000); // Check every minute
-        <?php endif; ?>
+                element.addEventListener('mouseleave', function() {
+                    tooltip.remove();
+                });
+            });
+        });
+
+        // Handle back button
+        if (window.history.length > 1) {
+            document.querySelectorAll('[data-back]').forEach(function(element) {
+                element.classList.remove('hidden');
+            });
+        }
     </script>
 </body>
 </html>

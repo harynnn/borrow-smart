@@ -2,48 +2,29 @@
 define('SECURE_ACCESS', true);
 require_once 'includes/init.php';
 
-// Check if user is in 2FA verification state
-if (!isset($_SESSION['2fa_user_id'])) {
-    header('Location: login.php');
+// Require authentication
+Middleware::requireAuth();
+
+// Check if 2FA is pending
+if (!isset($_SESSION['2fa_required']) || isset($_SESSION['2fa_verified'])) {
+    header('Location: ' . SessionHandler::getUserRole() . '_dashboard.php');
     exit();
 }
 
 try {
+    // Generate new 2FA code
+    $code = $securityHelper->generate2FACode($_SESSION['uid']);
+
     // Get user details
     $stmt = $pdo->prepare("
         SELECT name, email 
         FROM users 
         WHERE uid = ?
     ");
-    $stmt->execute([$_SESSION['2fa_user_id']]);
+    $stmt->execute([$_SESSION['uid']]);
     $user = $stmt->fetch();
 
-    if (!$user) {
-        throw new Exception("Invalid user session.");
-    }
-
-    // Check for rate limiting
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM two_factor_codes 
-        WHERE user_id = ? 
-        AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-    ");
-    $stmt->execute([$_SESSION['2fa_user_id']]);
-    $recentAttempts = $stmt->fetchColumn();
-
-    if ($recentAttempts >= 3) {
-        throw new Exception("Too many code requests. Please wait 5 minutes before trying again.");
-    }
-
-    // Generate new 2FA code
-    $code = $securityHelper->generate2FACode($_SESSION['2fa_user_id']);
-
-    // Send email with new code
-    require_once 'PHPMailer-master/src/PHPMailer.php';
-    require_once 'PHPMailer-master/src/SMTP.php';
-    require_once 'PHPMailer-master/src/Exception.php';
-
+    // Send 2FA code via email
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
 
     // Server settings
@@ -61,9 +42,9 @@ try {
 
     // Content
     $mail->isHTML(true);
-    $mail->Subject = 'New Verification Code - ' . APP_NAME;
+    $mail->Subject = '2FA Code - ' . APP_NAME;
     
-    $emailContent = '
+    $mail->Body = '
     <!DOCTYPE html>
     <html>
     <head>
@@ -77,23 +58,15 @@ try {
                 max-width: 600px; 
                 margin: 0 auto; 
                 padding: 20px;
-                background-color: #f8f9fa;
-            }
-            .header { 
-                text-align: center; 
-                margin-bottom: 30px;
-                padding: 20px;
-                background-color: #fff;
-                border-radius: 8px;
             }
             .code {
+                font-size: 24px;
+                font-weight: bold;
                 text-align: center;
-                font-size: 32px;
-                letter-spacing: 4px;
-                margin: 20px 0;
-                padding: 10px;
-                background-color: #fff;
+                padding: 20px;
+                background-color: #f8f9fa;
                 border-radius: 4px;
+                margin: 20px 0;
             }
             .warning {
                 background-color: #fff3cd;
@@ -101,63 +74,54 @@ try {
                 padding: 12px;
                 margin: 20px 0;
             }
-            .footer { 
-                text-align: center; 
-                margin-top: 30px;
-                font-size: 12px;
-                color: #666;
-            }
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="header">
-                <h2>New Verification Code</h2>
-            </div>
+            <h2>Two-Factor Authentication Code</h2>
             <p>Hello ' . htmlspecialchars($user['name']) . ',</p>
-            <p>You requested a new verification code. Here is your new code:</p>
+            <p>Your new verification code is:</p>
             <div class="code">' . $code . '</div>
             <div class="warning">
                 <p><strong>Important:</strong></p>
                 <ul>
                     <li>This code will expire in 5 minutes</li>
-                    <li>If you did not request this code, please ignore this email</li>
-                    <li>Never share this code with anyone</li>
+                    <li>If you did not request this code, please secure your account</li>
                 </ul>
             </div>
-            <div class="footer">
-                <p>This is an automated message from ' . APP_NAME . '. Please do not reply.</p>
-                <p>&copy; ' . date('Y') . ' ' . APP_NAME . ' - UTHM. All rights reserved.</p>
-            </div>
+            <p>Best regards,<br>' . APP_NAME . ' Team</p>
         </div>
     </body>
     </html>';
     
-    $mail->Body = $emailContent;
     $mail->AltBody = "Hello " . $user['name'] . ",\n\n"
-                   . "You requested a new verification code. Here is your new code:\n\n"
-                   . $code . "\n\n"
+                   . "Your new verification code is: " . $code . "\n\n"
                    . "This code will expire in 5 minutes.\n"
-                   . "If you did not request this code, please ignore this email.\n"
-                   . "Never share this code with anyone.";
+                   . "If you did not request this code, please secure your account.\n\n"
+                   . "Best regards,\n"
+                   . APP_NAME . " Team";
 
     $mail->send();
 
-    // Log the event
+    // Log 2FA code resend
     $securityHelper->logSecurityEvent(
-        $_SESSION['2fa_user_id'],
-        '2FA_RESEND',
-        'New 2FA code sent'
+        $_SESSION['uid'],
+        '2FA_CODE_RESENT',
+        '2FA code resent from ' . $_SERVER['REMOTE_ADDR']
     );
 
+    // Set success message
     $_SESSION['success'] = "A new verification code has been sent to your email.";
 
 } catch (Exception $e) {
-    error_log("2FA Resend Error: " . $e->getMessage());
-    $_SESSION['error'] = $e->getMessage();
+    // Log error
+    error_log("2FA Code Resend Error: " . $e->getMessage());
+    
+    // Set error message
+    $_SESSION['error'] = "Failed to send verification code. Please try again.";
 }
 
-// Redirect back to verification page
+// Redirect back to verify 2FA page
 header('Location: verify_2fa.php');
 exit();
 ?>

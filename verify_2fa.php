@@ -2,10 +2,10 @@
 define('SECURE_ACCESS', true);
 require_once 'includes/init.php';
 
-$page_title = "Two-Factor Authentication";
+$page_title = "Verify Two-Factor Authentication";
 
-// Check if user has a pending 2FA session
-if (!isset($_SESSION['2fa_pending']) || !isset($_SESSION['2fa_user_id'])) {
+// Check if user is in 2FA verification state
+if (!isset($_SESSION['2fa_user_id'])) {
     header('Location: login.php');
     exit();
 }
@@ -19,36 +19,45 @@ $stmt = $pdo->prepare("
 $stmt->execute([$_SESSION['2fa_user_id']]);
 $user = $stmt->fetch();
 
-if (!$user) {
-    header('Location: login.php');
-    exit();
-}
-
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Verify CSRF token
-    if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-        $_SESSION['error'] = "Invalid request. Please try again.";
-        header('Location: verify_2fa.php');
-        exit();
-    }
+    try {
+        // Verify CSRF token
+        if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'])) {
+            throw new Exception("Invalid request. Please try again.");
+        }
 
-    // Validate code
-    if (empty($_POST['code'])) {
-        $_SESSION['error'] = "Please enter the verification code.";
-        header('Location: verify_2fa.php');
-        exit();
-    }
+        // Validate code
+        if (empty($_POST['code'])) {
+            throw new Exception("Please enter the verification code.");
+        }
 
-    $code = trim($_POST['code']);
+        $code = trim($_POST['code']);
 
-    // Verify the code
-    if ($securityHelper->verify2FACode($_SESSION['2fa_user_id'], $code)) {
-        // Code is valid, complete login
+        // Verify 2FA code
+        if (!$securityHelper->verify2FACode($_SESSION['2fa_user_id'], $code)) {
+            // Log failed attempt
+            $securityHelper->logSecurityEvent(
+                $_SESSION['2fa_user_id'],
+                '2FA_FAILED',
+                'Invalid 2FA code attempt'
+            );
+
+            throw new Exception("Invalid verification code. Please try again.");
+        }
+
+        // Log successful verification
+        $securityHelper->logSecurityEvent(
+            $_SESSION['2fa_user_id'],
+            '2FA_SUCCESS',
+            '2FA verification successful'
+        );
+
+        // Complete login process
         $_SESSION['uid'] = $_SESSION['2fa_user_id'];
-        $_SESSION['email'] = $user['email'];
         $_SESSION['name'] = $user['name'];
-
+        $_SESSION['email'] = $user['email'];
+        
         // Get user role
         $stmt = $pdo->prepare("
             SELECT r.role_name 
@@ -59,35 +68,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$_SESSION['uid']]);
         $_SESSION['role'] = $stmt->fetchColumn();
 
-        // Clear 2FA session data
-        unset($_SESSION['2fa_pending']);
-        unset($_SESSION['2fa_user_id']);
-
         // Initialize session security
         $securityHelper->initializeSession($_SESSION['uid']);
 
-        // Log successful login
-        $securityHelper->logSecurityEvent(
-            $_SESSION['uid'],
-            'LOGIN_SUCCESS_2FA',
-            'User logged in successfully with 2FA'
-        );
+        // Clear 2FA session data
+        unset($_SESSION['2fa_user_id']);
 
-        // Redirect to dashboard
-        header('Location: ' . $_SESSION['role'] . '_dashboard.php');
-        exit();
-    } else {
-        $_SESSION['error'] = "Invalid verification code. Please try again.";
+        // Redirect to intended URL or dashboard
+        $redirect_url = $_SESSION['intended_url'] ?? $_SESSION['role'] . '_dashboard.php';
+        unset($_SESSION['intended_url']);
         
-        // Log failed attempt
-        $securityHelper->logSecurityEvent(
-            $_SESSION['2fa_user_id'],
-            'LOGIN_FAILED_2FA',
-            'Invalid 2FA code attempt'
-        );
-
-        header('Location: verify_2fa.php');
+        header('Location: ' . $redirect_url);
         exit();
+
+    } catch (Exception $e) {
+        $_SESSION['error'] = $e->getMessage();
     }
 }
 ?>
@@ -96,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - BorrowSmart</title>
+    <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -147,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <form class="space-y-6" action="verify_2fa.php" method="POST">
                     <?php echo csrf_field(); ?>
-                    
+
                     <div>
                         <label for="code" class="block text-sm font-medium text-gray-700">
                             Verification Code
@@ -155,8 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mt-1">
                             <input id="code" name="code" type="text" required
                                 class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                                placeholder="Enter 6-digit code"
                                 pattern="[0-9]{6}"
+                                title="Please enter the 6-digit verification code"
                                 maxlength="6"
                                 autocomplete="one-time-code">
                         </div>
@@ -177,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="relative flex justify-center text-sm">
                             <span class="px-2 bg-white text-gray-500">
-                                Or
+                                Need help?
                             </span>
                         </div>
                     </div>
@@ -187,41 +182,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                             Resend Code
                         </a>
-                        <a href="logout.php" 
+                        <a href="contact.php" 
                            class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                            Cancel Login
+                            Contact Support
                         </a>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="mt-8 text-center">
-                <p class="text-xs text-gray-500">
-                    Having trouble? <a href="contact.php" class="font-medium text-gray-900 hover:text-gray-800">Contact Support</a>
-                </p>
-            </div>
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-500">
+                &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved.
+            </p>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.querySelector('form');
-            const codeInput = document.getElementById('code');
+        // Auto-focus code input
+        document.getElementById('code').focus();
+
+        // Format code input
+        document.getElementById('code').addEventListener('input', function(e) {
+            // Remove non-digits
+            this.value = this.value.replace(/\D/g, '');
             
-            // Focus code input on page load
-            codeInput.focus();
+            // Limit to 6 digits
+            if (this.value.length > 6) {
+                this.value = this.value.slice(0, 6);
+            }
+        });
 
-            // Format code input to numbers only
-            codeInput.addEventListener('input', function(e) {
-                this.value = this.value.replace(/[^0-9]/g, '');
-            });
-
-            // Auto-submit when 6 digits are entered
-            codeInput.addEventListener('input', function(e) {
-                if (this.value.length === 6) {
-                    form.submit();
-                }
-            });
+        // Auto-submit when code is complete
+        document.getElementById('code').addEventListener('input', function(e) {
+            if (this.value.length === 6) {
+                this.form.submit();
+            }
         });
     </script>
 </body>

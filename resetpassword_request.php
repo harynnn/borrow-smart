@@ -8,221 +8,197 @@ if (isset($_SESSION['uid'])) {
     exit();
 }
 
-// Verify request method
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: forgotpassword.php');
-    exit();
-}
-
-// Verify CSRF token
-if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-    $_SESSION['error'] = "Invalid request. Please try again.";
-    header('Location: forgotpassword.php');
-    exit();
-}
-
-// Validate email
-if (empty($_POST['email'])) {
-    $_SESSION['error'] = "Please enter your email address.";
-    header('Location: forgotpassword.php');
-    exit();
-}
-
-$email = trim(strtolower($_POST['email']));
-
 try {
+    // Verify CSRF token
+    if (!$securityHelper->verifyCsrfToken($_POST['csrf_token'])) {
+        throw new Exception("Invalid request. Please try again.");
+    }
+
+    // Validate email
+    if (empty($_POST['email'])) {
+        throw new Exception("Please enter your email address.");
+    }
+
+    $email = strtolower(trim($_POST['email']));
+
+    // Validate email format
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new Exception("Please enter a valid email address.");
+    }
+
+    // Check if email is from UTHM domain
+    if (!preg_match('/@(uthm\.edu\.my|student\.uthm\.edu\.my)$/', $email)) {
+        throw new Exception("Please enter your UTHM email address.");
+    }
+
     // Begin transaction
     $pdo->beginTransaction();
 
-    // Get user by email
-    $stmt = $pdo->prepare("
-        SELECT uid, name, email, status 
-        FROM users 
-        WHERE email = ?
-    ");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    try {
+        // Get user by email
+        $stmt = $pdo->prepare("
+            SELECT uid, name, email, status 
+            FROM users 
+            WHERE email = ?
+        ");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
 
-    if (!$user) {
-        throw new Exception("If an account exists with this email, you will receive a password reset link.");
-    }
-
-    // Check account status
-    if ($user['status'] !== 'active') {
-        switch ($user['status']) {
-            case 'pending':
-                throw new Exception("Please verify your email address before resetting your password.");
-            case 'suspended':
-                throw new Exception("This account has been suspended. Please contact support.");
-            case 'deleted':
-                throw new Exception("This account has been deleted.");
-            default:
-                throw new Exception("Account is not active.");
+        if (!$user) {
+            throw new Exception("If your email is registered, you will receive password reset instructions.");
         }
-    }
 
-    // Check rate limiting
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM security_logs 
-        WHERE user_id = ? 
-        AND event_type = 'PASSWORD_RESET_REQUEST'
-        AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
-    ");
-    $stmt->execute([$user['uid']]);
-    
-    if ($stmt->fetchColumn() >= 3) {
-        throw new Exception("Too many reset attempts. Please wait 15 minutes and try again.");
-    }
+        // Check account status
+        if ($user['status'] !== 'active') {
+            throw new Exception("If your email is registered, you will receive password reset instructions.");
+        }
 
-    // Generate reset token
-    $resetToken = bin2hex(random_bytes(32));
-    $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        // Check for recent reset requests
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM password_resets 
+            WHERE user_id = ? 
+            AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+            AND used = 0
+        ");
+        $stmt->execute([$user['uid']]);
+        if ($stmt->fetchColumn() > 0) {
+            throw new Exception("A reset link was recently sent. Please wait 15 minutes before requesting another.");
+        }
 
-    // Store reset token
-    $stmt = $pdo->prepare("
-        INSERT INTO password_resets (
-            user_id, token, expires_at, created_at
-        ) VALUES (
-            ?, ?, ?, NOW()
-        )
-    ");
-    $stmt->execute([
-        $user['uid'],
-        password_hash($resetToken, PASSWORD_DEFAULT),
-        $expires
-    ]);
+        // Generate reset token
+        $token = $securityHelper->generateRandomString(32);
+        $expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
-    // Send reset email
-    require_once 'PHPMailer-master/src/PHPMailer.php';
-    require_once 'PHPMailer-master/src/SMTP.php';
-    require_once 'PHPMailer-master/src/Exception.php';
+        // Save reset token
+        $stmt = $pdo->prepare("
+            INSERT INTO password_resets (
+                user_id, token, expires_at, created_at
+            ) VALUES (?, ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $user['uid'],
+            password_hash($token, PASSWORD_DEFAULT),
+            $expiry
+        ]);
 
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        // Send reset email
+        require_once 'PHPMailer-master/src/PHPMailer.php';
+        require_once 'PHPMailer-master/src/SMTP.php';
+        require_once 'PHPMailer-master/src/Exception.php';
 
-    // Server settings
-    $mail->isSMTP();
-    $mail->Host = SMTP_HOST;
-    $mail->SMTPAuth = true;
-    $mail->Username = SMTP_USERNAME;
-    $mail->Password = SMTP_PASSWORD;
-    $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = SMTP_PORT;
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
 
-    // Recipients
-    $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
-    $mail->addAddress($user['email'], $user['name']);
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->SMTPAuth = true;
+        $mail->Username = SMTP_USERNAME;
+        $mail->Password = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = SMTP_PORT;
 
-    // Content
-    $mail->isHTML(true);
-    $mail->Subject = 'Reset Your Password - BorrowSmart';
-    
-    $resetUrl = APP_URL . '/resetpassword.php?token=' . $resetToken;
-    
-    $emailContent = '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                line-height: 1.6; 
-                color: #333;
-            }
-            .container { 
-                max-width: 600px; 
-                margin: 0 auto; 
-                padding: 20px;
-                background-color: #f8f9fa;
-            }
-            .header { 
-                text-align: center; 
-                margin-bottom: 30px;
-                padding: 20px;
-                background-color: #fff;
-                border-radius: 8px;
-            }
-            .button {
-                display: inline-block;
-                padding: 12px 24px;
-                background-color: #1a1a1a;
-                color: #ffffff;
-                text-decoration: none;
-                border-radius: 4px;
-                margin: 20px 0;
-            }
-            .warning {
-                background-color: #fff3cd;
-                border-left: 4px solid #ffc107;
-                padding: 12px;
-                margin: 20px 0;
-            }
-            .footer { 
-                text-align: center; 
-                margin-top: 30px;
-                font-size: 12px;
-                color: #666;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
+        // Recipients
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($user['email'], $user['name']);
+
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Reset Your Password - ' . APP_NAME;
+        
+        $resetLink = APP_URL . '/resetpassword.php?token=' . $token;
+        
+        $mail->Body = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333;
+                }
+                .container { 
+                    max-width: 600px; 
+                    margin: 0 auto; 
+                    padding: 20px;
+                }
+                .button {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    background-color: #000;
+                    color: #fff;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+                .warning {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 12px;
+                    margin: 20px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
                 <h2>Reset Your Password</h2>
+                <p>Hello ' . htmlspecialchars($user['name']) . ',</p>
+                <p>We received a request to reset your password. Click the button below to create a new password:</p>
+                <p>
+                    <a href="' . $resetLink . '" class="button">Reset Password</a>
+                </p>
+                <p>Or copy and paste this link in your browser:</p>
+                <p>' . $resetLink . '</p>
+                <div class="warning">
+                    <p><strong>Important:</strong></p>
+                    <ul>
+                        <li>This link will expire in 1 hour</li>
+                        <li>If you did not request this reset, please ignore this email</li>
+                        <li>If you receive multiple reset emails, use only the most recent one</li>
+                    </ul>
+                </div>
+                <p>For security reasons, we recommend changing your password regularly and never sharing it with anyone.</p>
+                <p>Best regards,<br>' . APP_NAME . ' Team</p>
             </div>
-            <p>Hello ' . htmlspecialchars($user['name']) . ',</p>
-            <p>You requested to reset your password. Click the button below to create a new password:</p>
-            <div style="text-align: center;">
-                <a href="' . $resetUrl . '" class="button">Reset Password</a>
-            </div>
-            <p>Or copy and paste this URL into your browser:</p>
-            <p>' . $resetUrl . '</p>
-            <div class="warning">
-                <p><strong>Important:</strong></p>
-                <ul>
-                    <li>This link will expire in 1 hour</li>
-                    <li>If you did not request this reset, please ignore this email</li>
-                    <li>If you receive multiple reset emails, use only the most recent one</li>
-                </ul>
-            </div>
-            <div class="footer">
-                <p>This is an automated message from BorrowSmart System. Please do not reply.</p>
-                <p>&copy; ' . date('Y') . ' BorrowSmart - UTHM. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
-    </html>';
-    
-    $mail->Body = $emailContent;
-    $mail->AltBody = "Hello " . $user['name'] . ",\n\n"
-                   . "You requested to reset your password. Please click this link to create a new password:\n"
-                   . $resetUrl . "\n\n"
-                   . "This link will expire in 1 hour.\n\n"
-                   . "If you did not request this reset, please ignore this email.";
+        </body>
+        </html>';
+        
+        $mail->AltBody = "Hello " . $user['name'] . ",\n\n"
+                       . "We received a request to reset your password. Click this link to create a new password:\n\n"
+                       . $resetLink . "\n\n"
+                       . "This link will expire in 1 hour.\n\n"
+                       . "If you did not request this reset, please ignore this email.\n"
+                       . "If you receive multiple reset emails, use only the most recent one.\n\n"
+                       . "For security reasons, we recommend changing your password regularly and never sharing it with anyone.\n\n"
+                       . "Best regards,\n"
+                       . APP_NAME . " Team";
 
-    $mail->send();
+        $mail->send();
 
-    // Log reset request
-    $securityHelper->logSecurityEvent(
-        $user['uid'],
-        'PASSWORD_RESET_REQUEST',
-        'Password reset requested'
-    );
+        // Log password reset request
+        $securityHelper->logSecurityEvent(
+            $user['uid'],
+            'PASSWORD_RESET_REQUEST',
+            'Password reset requested'
+        );
 
-    // Commit transaction
-    $pdo->commit();
+        // Commit transaction
+        $pdo->commit();
 
-    $_SESSION['success'] = "If an account exists with this email, you will receive a password reset link.";
+        $_SESSION['success'] = "If your email is registered, you will receive password reset instructions.";
+
+    } catch (Exception $e) {
+        // Rollback transaction
+        $pdo->rollBack();
+        throw $e;
+    }
 
 } catch (Exception $e) {
-    // Rollback transaction
-    $pdo->rollBack();
-
     error_log("Password Reset Request Error: " . $e->getMessage());
     $_SESSION['error'] = $e->getMessage();
 }
 
-// Always redirect back to forgot password page
+// Redirect back to forgot password page
 header('Location: forgotpassword.php');
 exit();
 ?>
